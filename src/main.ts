@@ -9,6 +9,7 @@ let camera;
 let renderer;
 let controls: THREE.OrbitControls;
 let data: string;
+let stats;
 
 $(document).ready(async e => {
     loadScene();
@@ -114,6 +115,10 @@ function startRender() {
     // controls.enableDamping = true;
     // controls.dampingFactor = 0.25;
 
+    // performance monitor
+    stats = new Stats();
+    document.body.appendChild(stats.dom);
+
     document.body.appendChild(renderer.domElement);
     render();
 }
@@ -122,6 +127,7 @@ function startRender() {
 function render() {
     requestAnimationFrame(render);
     renderer.render(scene, camera);
+    stats.update();
 }
 
 window.onresize = (e) => {
