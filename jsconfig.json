@@ -1,0 +1,10 @@
+{
+    "compilerOptions": {
+        "target": "ES6"
+    },
+    "files": [
+        "./src/**/*.js",
+        "./typings/*.d.ts",
+        "./main.js"
+    ]
+}
