@@ -39,7 +39,7 @@ class Point {
         this.x = parseInt(x);
         this.y = parseInt(y);
         this.z = parseInt(z);
-        this.color = new Color(r, g, b);
+        // this.color = new Color(r, g, b);
     }
 }
 
