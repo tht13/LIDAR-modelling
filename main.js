@@ -9,17 +9,20 @@ let mainWindow = null;
 
 /**
  * 
- * @param {string} name 
+ * @param {IpcMainEvent} event
+ * @param {string} name
  */
-function sendFile(name) {
-  console.log("send "+name);
-  const stream = createReadStream(join(__dirname, name));
-  stream.pipe(ipcMain);
+function sendFile(event, name) {
+  const stream = createReadStream(join(__dirname, name), { encoding: "utf8" });
+  stream.on("data", chunk => event.sender.send("data", chunk));
 
   stream.on("end", () => {
     stream.close();
+    event.sender.send("close");
   });
 }
+
+ipcMain.on("open", (e, name) => sendFile(e, name));
 
 // Quit when all windows are closed.
 app.on('window-all-closed', () => {
@@ -40,9 +43,7 @@ app.on('ready', () => {
   mainWindow.loadURL('file://' + __dirname + '/index.html');
 
   // Open the DevTools.
-  //   mainWindow.webContents.openDevTools();
-
-  ipcMain.on("open", (e, name) => sendFile(name));
+  mainWindow.webContents.openDevTools();
 
   // Emitted when the window is closed.
   mainWindow.on('closed', () => {

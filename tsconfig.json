@@ -3,7 +3,17 @@
         "target": "es6",
 		"module": "commonjs",
 		"sourceMap": true,
-		"outDir": "dist"
+		"outDir": "dist",
+		// "checkJs": true,
+		// "allowJs": true,
+		"pretty": true,
+		"lib": [
+			"esnext",
+			"esnext.asynciterable",
+			"dom",
+			"dom.iterable",
+			"es2015"
+		]
     },
 	"exclude": [
 		"node_modules"

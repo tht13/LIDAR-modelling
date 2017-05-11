@@ -8,13 +8,14 @@ let scene;
 let camera;
 let renderer;
 let controls: THREE.OrbitControls;
-let data: string;
 let stats;
 
 $(document).ready(async e => {
     loadScene();
-    await loadPoints();
-    drawPoints();
+    const t1 = new Date().getTime();
+    await drawPoints();
+    const t2 = new Date().getTime();
+    console.log(t2 - t1);
     startRender();
 });
 
@@ -42,21 +43,51 @@ class Point {
     }
 }
 
-async function loadPoints(): Promise<void> {
-    // return new Promise<void>((res, rej) => {
-    //     ipcRenderer.emit("open", "points.txt");
-    //     let file = "";
-    //     ipcRenderer.on("data", (e, data) => file += data);
-    //     ipcRenderer.once("close", e => ipcRenderer.removeAllListeners("data"));
-    //     data = file;
-    // });
-    data = await $.get("points.txt");
+// async function getChunk() {
+//     return new Promise<string>((res, rej) => {
+//         ipcRenderer.once("data", (e, chunk) => res());
+//         setTimeout(res, 1000);
+//     });
+// }
+
+// async function* loadPointsGen() {
+//     let done = false;
+//     let data = "";
+//     ipcRenderer.send("open", "points.txt");
+//     ipcRenderer.on("data", (e, chunk) => data += chunk);
+//     while (!done) {
+//         await getChunk();
+//         if (data === "") {
+//             done = true;
+//             break;
+//         }
+//         let nl = data.lastIndexOf("\n");
+//         let newStart = nl + 1;
+//         nl = data.slice(nl - 1, nl) === "\r" ? nl - 1 : nl;
+//         let slice = data.substring(0, nl);
+//         data = data.slice(newStart);
+//         yield* slice.split(/\r?\n/g)
+//     }
+//     ipcRenderer.once("close", e => {
+//         done = true;
+//         ipcRenderer.removeAllListeners("data");
+//     });
+// }
+
+async function* loadPoint() {
+    yield* await new Promise<string[]>((res, rej) => {
+        let data = "";
+        ipcRenderer.send("open", "points.txt");
+        ipcRenderer.on("data", (e, chunk) => data += chunk);
+        ipcRenderer.once("close", e => {
+            ipcRenderer.removeAllListeners("data");
+            res(data.split(/\r?\n/g));
+        });
+    });
 }
 
-function* pointsGenerator() {
-    const lines = data.split(/\r?\n/g);
-
-    for (let line of lines) {
+async function* pointsGenerator() {
+    for await (let line of loadPoint()) {
         if (line == "") {
             continue;
         }
@@ -68,20 +99,16 @@ function* pointsGenerator() {
 
 }
 
-function drawPoints() {
+async function drawPoints() {
     let count = 0;
-    const div = 1;
+    const div = 2;
     const geometry = new THREE.BoxBufferGeometry(5, 5, 5);
-    const material = new THREE.MeshPhongMaterial();
-    for (let point of pointsGenerator()) {
-        // if (count++ % div !== 0) continue;
-        // material.color = new THREE.Color(point.color.r,
-        //     point.color.g,
-        //     point.color.b);
+    let material = new THREE.MeshPhongMaterial({ color: 0xFFFFFF });
+    for await (let point of pointsGenerator()) {
+        if (count++ % div !== 0) continue;
 
         const cube = new THREE.Mesh(geometry, material);
-        // const cube = new THREE.Mesh(geometry, material.clone());
-        // (cube.material as any).color.setRGB(point.color.r, point.color.g, point.color.b)
+
         cube.translateX(point.x - 600000);
         cube.translateZ(point.y - 4214000);
         cube.translateY(point.z);
