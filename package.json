@@ -1,20 +1,20 @@
 {
-  "name": "",
+  "name": "lidar modelling",
   "version": "1.0.0",
   "description": "",
   "main": "main.js",
   "scripts": {
     "build": "./node_modules/.bin/webpack",
     "package": "./node_modules/.bin/asar pack ./ ./LIDAR.asar",
-    "start": "electron main.js"
+    "start": "./node_modules/.bin/electron main.js"
   },
   "repository": {
     "type": "git"
   },
   "author": "Thomas Haakon Townsend",
   "dependencies": {
-    "electron-prebuilt": "1.4.13",
-    "jquery": "^2.2.3",
+    "electron": "^1.6.7",
+    "jquery": "^3.2.1",
     "stats.js": "git+https://github.com/mrdoob/stats.js.git",
     "three": "^0.85.2"
   },
