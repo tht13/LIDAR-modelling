@@ -43,23 +43,26 @@ export class FirstPersonControls {
     this.viewer.controls.enabled = !val;
 
     if (val) {
-      // Sync from active camera (works seamlessly in both Perspective and Orthographic modes)
-      const activeCam = this.viewer.activeCamera;
+      // Force Perspective Camera in Fly mode (disable orthographic)
+      if (this.viewer.getOrthoMode()) {
+        this.viewer.setOrthoMode(false);
+      }
+
+      const camera = this.viewer.perspCamera;
+      this.viewer.activeCamera = camera;
+
+      // Calculate yaw and pitch from current camera direction
       const dir = new THREE.Vector3();
-      activeCam.getWorldDirection(dir);
+      camera.getWorldDirection(dir);
       dir.normalize();
 
-      // Yaw around Y axis, Pitch around X axis
       this.euler.y = Math.atan2(-dir.x, -dir.z);
       this.euler.x = Math.asin(Math.max(-0.999, Math.min(0.999, dir.y)));
       this.euler.z = 0;
 
-      // Apply to both cameras
-      this.viewer.perspCamera.quaternion.setFromEuler(this.euler);
-      this.viewer.orthoCamera.quaternion.setFromEuler(this.euler);
-      this.viewer.orthoCamera.updateProjectionMatrix();
+      camera.quaternion.setFromEuler(this.euler);
 
-      // Adaptive speed based on model scale
+      // Adaptive base speed based on model scale
       const sphere = this.viewer.pointCloud?.getBoundingSphere();
       if (sphere && sphere.radius > 50) {
         this.baseSpeed = Math.max(120, sphere.radius * 0.4);
@@ -92,42 +95,37 @@ export class FirstPersonControls {
     const delta = Math.min(0.1, (time - this.lastTime) / 1000);
     this.lastTime = time;
 
-    const activeCam = this.viewer.activeCamera;
+    const camera = this.viewer.perspCamera;
     const currentSpeed = this.isTurbo ? this.baseSpeed * 2.5 : this.baseSpeed;
     const moveDist = currentSpeed * delta;
 
     const forward = new THREE.Vector3();
-    activeCam.getWorldDirection(forward);
+    camera.getWorldDirection(forward);
 
     const right = new THREE.Vector3();
-    right.crossVectors(forward, activeCam.up).normalize();
+    right.crossVectors(forward, camera.up).normalize();
 
-    const moveVector = new THREE.Vector3();
     if (this.moveForward) {
-      moveVector.addScaledVector(forward, moveDist);
+      camera.position.addScaledVector(forward, moveDist);
     }
     if (this.moveBackward) {
-      moveVector.addScaledVector(forward, -moveDist);
+      camera.position.addScaledVector(forward, -moveDist);
     }
     if (this.moveRight) {
-      moveVector.addScaledVector(right, moveDist);
+      camera.position.addScaledVector(right, moveDist);
     }
     if (this.moveLeft) {
-      moveVector.addScaledVector(right, -moveDist);
+      camera.position.addScaledVector(right, -moveDist);
     }
     if (this.moveUp) {
-      moveVector.y += moveDist;
+      camera.position.y += moveDist;
     }
     if (this.moveDown) {
-      moveVector.y -= moveDist;
+      camera.position.y -= moveDist;
     }
 
-    // Apply translation to BOTH cameras so switching between Ortho/Persp stays in sync
-    this.viewer.perspCamera.position.add(moveVector);
-    this.viewer.orthoCamera.position.add(moveVector);
-
-    // Keep orbit controls target positioned forward so switching back to orbit is seamless
-    this.viewer.controls.target.copy(activeCam.position).addScaledVector(forward, 150);
+    // Keep orbit controls target positioned forward so switching back to orbit mode is seamless
+    this.viewer.controls.target.copy(camera.position).addScaledVector(forward, 150);
   }
 
   public resetMovement(): void {
@@ -142,7 +140,7 @@ export class FirstPersonControls {
   }
 
   private bindEvents(): void {
-    // Prevent right-click context menu on canvas and while fly mode is active
+    // Suppress right-click context menu on canvas and while fly mode is active
     this.domElement.addEventListener("contextmenu", (e) => {
       e.preventDefault();
     });
@@ -154,7 +152,7 @@ export class FirstPersonControls {
       }
     });
 
-    // Reset stuck keys whenever window loses focus or pointer lock changes
+    // Reset movement keys whenever window loses focus or pointer lock releases
     window.addEventListener("blur", () => {
       this.resetMovement();
     });
@@ -276,27 +274,12 @@ export class FirstPersonControls {
       const maxPitch = Math.PI / 2 - 0.02;
       this.euler.x = Math.max(-maxPitch, Math.min(maxPitch, this.euler.x));
 
-      // Apply rotation to both Perspective and Orthographic cameras
       this.viewer.perspCamera.quaternion.setFromEuler(this.euler);
-      this.viewer.orthoCamera.quaternion.setFromEuler(this.euler);
-      this.viewer.orthoCamera.updateProjectionMatrix();
     });
 
-    // Mouse wheel adjusts fly speed (and zooms orthographic view if in ortho mode)
+    // Mouse wheel adjusts fly speed
     this.domElement.addEventListener("wheel", (e: WheelEvent) => {
       if (!this.enabled) return;
-
-      // In Orthographic mode, mouse wheel also zooms ortho camera view
-      if (this.viewer.getOrthoMode()) {
-        const orthoZoom = e.deltaY > 0 ? 1.08 : 0.92;
-        const oCam = this.viewer.orthoCamera;
-        oCam.left *= orthoZoom;
-        oCam.right *= orthoZoom;
-        oCam.top *= orthoZoom;
-        oCam.bottom *= orthoZoom;
-        oCam.updateProjectionMatrix();
-      }
-
       const factor = e.deltaY > 0 ? 0.85 : 1.18;
       this.baseSpeed = Math.max(25, Math.min(2500, this.baseSpeed * factor));
       if (this.onSpeedChangeCallback) {

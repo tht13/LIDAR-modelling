@@ -26,7 +26,7 @@ export class Viewer {
     this.perspCamera = new THREE.PerspectiveCamera(60, aspect, 0.1, 50000);
     this.perspCamera.position.set(0, 500, 1000);
 
-    this.orthoCamera = new THREE.OrthographicCamera(-500 * aspect, 500 * aspect, 500, -500, 0.1, 50000);
+    this.orthoCamera = new THREE.OrthographicCamera(-500 * aspect, 500 * aspect, 500, -500, -50000, 50000);
     this.activeCamera = this.perspCamera;
 
     this.renderer = new THREE.WebGLRenderer({
@@ -104,6 +104,8 @@ export class Viewer {
       this.orthoCamera.right = orthoH * aspect;
       this.orthoCamera.top = orthoH;
       this.orthoCamera.bottom = -orthoH;
+      this.orthoCamera.near = -50000;
+      this.orthoCamera.far = 50000;
       this.orthoCamera.position.copy(currentPos);
       this.orthoCamera.lookAt(currentTarget);
       this.orthoCamera.updateProjectionMatrix();

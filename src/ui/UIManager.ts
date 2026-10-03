@@ -197,22 +197,38 @@ export class UIManager {
         this.flyHint.style.display = tool === "fly" ? "flex" : "none";
 
         if (tool === "fly") {
+          // Disable orthographic mode in fly mode and force perspective
+          if (this.viewer.getOrthoMode()) {
+            this.viewer.setOrthoMode(false);
+          }
+          this.toggleOrtho.checked = false;
+          this.toggleOrtho.disabled = true;
+          (this.toggleOrtho.closest('.control-row') as HTMLElement | null)?.style.setProperty('opacity', '0.35');
+          (this.toggleOrtho.closest('.control-row') as HTMLElement | null)?.style.setProperty('pointer-events', 'none');
+
           const speedEl = document.getElementById("fly-speed-val");
           if (speedEl) speedEl.textContent = this.viewer.firstPersonControls.getSpeed().toString();
           this.measureBox.style.display = "none";
           this.profilePanel.style.display = "none";
-        } else if (tool === "measure") {
-          this.measureBox.style.display = "flex";
-          this.measure3d.textContent = "Click first point on point cloud...";
-          this.measureH.textContent = "-";
-          this.measureZ.textContent = "-";
-          this.profilePanel.style.display = "none";
-        } else if (tool === "profile") {
-          this.measureBox.style.display = "none";
-          this.profilePanel.style.display = "none";
         } else {
-          this.measureBox.style.display = "none";
-          this.profilePanel.style.display = "none";
+          // Re-enable orthographic toggle in all other modes
+          this.toggleOrtho.disabled = false;
+          (this.toggleOrtho.closest('.control-row') as HTMLElement | null)?.style.removeProperty('opacity');
+          (this.toggleOrtho.closest('.control-row') as HTMLElement | null)?.style.removeProperty('pointer-events');
+
+          if (tool === "measure") {
+            this.measureBox.style.display = "flex";
+            this.measure3d.textContent = "Click first point on point cloud...";
+            this.measureH.textContent = "-";
+            this.measureZ.textContent = "-";
+            this.profilePanel.style.display = "none";
+          } else if (tool === "profile") {
+            this.measureBox.style.display = "none";
+            this.profilePanel.style.display = "none";
+          } else {
+            this.measureBox.style.display = "none";
+            this.profilePanel.style.display = "none";
+          }
         }
       });
     });
