@@ -18,7 +18,7 @@ export class Viewer {
   public pointCloud: PointCloud | null = null;
   private isOrthoMode: boolean = false;
 
-  constructor(container: HTMLElement = document.body) {
+  constructor(container?: HTMLElement) {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x121214);
 
@@ -36,7 +36,17 @@ export class Viewer {
     });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    container.appendChild(this.renderer.domElement);
+
+    this.renderer.domElement.classList.add("webgl-canvas");
+    this.renderer.domElement.style.position = "absolute";
+    this.renderer.domElement.style.top = "0";
+    this.renderer.domElement.style.left = "0";
+    this.renderer.domElement.style.width = "100%";
+    this.renderer.domElement.style.height = "100%";
+    this.renderer.domElement.style.zIndex = "0";
+
+    const targetMount = container || document.getElementById("canvas-container") || document.body;
+    targetMount.appendChild(this.renderer.domElement);
 
     this.controls = new OrbitControls(this.activeCamera, this.renderer.domElement);
     this.controls.enableDamping = true;
