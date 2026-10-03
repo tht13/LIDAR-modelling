@@ -10,7 +10,7 @@
     "build": "npm run build:web",
     "build:web": "webpack --mode production",
     "build:electron": "webpack --mode production",
-    "start": "npm run start:electron",
+    "start": "npm run start:web",
     "start:web": "webpack serve --mode production --open",
     "start:electron": "electron main.js"
   },
