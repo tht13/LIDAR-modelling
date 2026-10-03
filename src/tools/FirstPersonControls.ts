@@ -48,8 +48,8 @@ export class FirstPersonControls {
         this.viewer.setOrthoMode(false);
       }
 
-      const camera = this.viewer.perspCamera;
-      this.viewer.activeCamera = camera;
+      const camera = this.viewer.cameraManager.perspCamera;
+      this.viewer.cameraManager.activeCamera = camera;
 
       // Calculate yaw and pitch from current camera direction
       const dir = new THREE.Vector3();
@@ -95,7 +95,7 @@ export class FirstPersonControls {
     const delta = Math.min(0.1, (time - this.lastTime) / 1000);
     this.lastTime = time;
 
-    const camera = this.viewer.perspCamera;
+    const camera = this.viewer.cameraManager.perspCamera;
     const currentSpeed = this.isTurbo ? this.baseSpeed * 2.5 : this.baseSpeed;
     const moveDist = currentSpeed * delta;
 
@@ -274,7 +274,7 @@ export class FirstPersonControls {
       const maxPitch = Math.PI / 2 - 0.02;
       this.euler.x = Math.max(-maxPitch, Math.min(maxPitch, this.euler.x));
 
-      this.viewer.perspCamera.quaternion.setFromEuler(this.euler);
+      this.viewer.cameraManager.perspCamera.quaternion.setFromEuler(this.euler);
     });
 
     // Mouse wheel adjusts fly speed

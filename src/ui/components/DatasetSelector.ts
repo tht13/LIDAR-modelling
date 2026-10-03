@@ -1,9 +1,9 @@
 import { createElement } from "../utils/dom";
+import { AppEvents } from "../../core/AppEvents";
 
 export class DatasetSelector {
   public readonly element: HTMLElement;
   private selectDataset: HTMLSelectElement | null;
-  private onSelectCallback: ((datasetId: string) => void) | null = null;
 
   constructor() {
     let el = document.getElementById("select-dataset")?.closest(".dataset-control-group") as HTMLElement | null;
@@ -17,11 +17,16 @@ export class DatasetSelector {
     }
     this.element = el;
     this.selectDataset = this.element.querySelector("#select-dataset") || (document.getElementById("select-dataset") as HTMLSelectElement | null);
-    this.bindEvents();
-  }
+    
+    AppEvents.on("ui:dataset-changed", (id: string) => {
+      this.setValue(id);
+    });
 
-  public onSelect(cb: (datasetId: string) => void): void {
-    this.onSelectCallback = cb;
+    AppEvents.on("ui:dataset-imported", (id: string, name: string) => {
+      this.addImportedDataset(id, name);
+    });
+
+    this.bindEvents();
   }
 
   public setValue(id: string): void {
@@ -66,13 +71,13 @@ export class DatasetSelector {
       const selected = this.selectDataset.value;
       if (selected === "custom-url") {
         const url = prompt("Enter public URL of point cloud (.txt, .xyz, .csv, .pts, .las, .laz, .ply, .tif):");
-        if (url && url.trim() && this.onSelectCallback) {
-          this.onSelectCallback(`url:${url.trim()}`);
+        if (url && url.trim()) {
+          AppEvents.emit("action:load-dataset", `url:${url.trim()}`);
         } else {
           this.selectDataset.value = "mountain-lidar";
         }
-      } else if (this.onSelectCallback) {
-        this.onSelectCallback(selected);
+      } else {
+        AppEvents.emit("action:load-dataset", selected);
       }
     });
   }

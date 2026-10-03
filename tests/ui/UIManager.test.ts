@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { UIManager } from "../../src/ui/UIManager";
+import { AppEvents } from "../../src/core/AppEvents";
 
 describe("UIManager Dataset Hierarchy & Imported Dataset Reversion", () => {
   let uiManager: UIManager;
@@ -139,7 +140,7 @@ describe("UIManager Dataset Hierarchy & Imported Dataset Reversion", () => {
   });
 
   it("adds imported file into group-imported, removes placeholder, and selects it", () => {
-    uiManager.addImportedDataset("imported-output_hh_tif", "🗺️ output_hh.tif");
+    uiManager.datasetSelector.addImportedDataset("imported-output_hh_tif", "🗺️ output_hh.tif");
 
     const placeholder = document.getElementById("opt-no-imported");
     expect(placeholder).toBeNull();
@@ -155,22 +156,22 @@ describe("UIManager Dataset Hierarchy & Imported Dataset Reversion", () => {
 
   it("allows switching to another dataset and reverting back to the imported file", () => {
     // 1. Import a file
-    uiManager.addImportedDataset("imported-norway_las", "🛰️ norway.las");
+    uiManager.datasetSelector.addImportedDataset("imported-norway_las", "🛰️ norway.las");
     const select = document.getElementById("select-dataset") as HTMLSelectElement;
     expect(select.value).toBe("imported-norway_las");
 
     // 2. Switch to procedural norway fjord
-    uiManager.setDatasetValue("norway-fjord");
+    uiManager.datasetSelector.setValue("norway-fjord");
     expect(select.value).toBe("norway-fjord");
 
     // 3. Revert back to imported file
-    uiManager.setDatasetValue("imported-norway_las");
+    uiManager.datasetSelector.setValue("imported-norway_las");
     expect(select.value).toBe("imported-norway_las");
   });
 
   it("updates existing imported dataset without creating duplicate options", () => {
-    uiManager.addImportedDataset("imported-scan1", "🛰️ scan1.las");
-    uiManager.addImportedDataset("imported-scan1", "🛰️ scan1.las (reloaded)");
+    uiManager.datasetSelector.addImportedDataset("imported-scan1", "🛰️ scan1.las");
+    uiManager.datasetSelector.addImportedDataset("imported-scan1", "🛰️ scan1.las (reloaded)");
 
     const importedGroup = document.getElementById("group-imported") as HTMLOptGroupElement;
     const matching = importedGroup.querySelectorAll('option[value="imported-scan1"]');
@@ -178,9 +179,8 @@ describe("UIManager Dataset Hierarchy & Imported Dataset Reversion", () => {
     expect(matching[0].textContent).toBe("🛰️ scan1.las (reloaded)");
   });
 
-  it("handles custom-url selection by prompting and notifying callback", () => {
-    const callback = vi.fn();
-    uiManager.onDatasetSelect(callback);
+  it("handles custom-url selection by prompting and emitting action:load-dataset", () => {
+    const callback = vi.spyOn(AppEvents, "emit");
 
     vi.spyOn(window, "prompt").mockReturnValue("https://example.com/pointcloud.las");
 
@@ -189,6 +189,6 @@ describe("UIManager Dataset Hierarchy & Imported Dataset Reversion", () => {
     select.dispatchEvent(new Event("change"));
 
     expect(window.prompt).toHaveBeenCalled();
-    expect(callback).toHaveBeenCalledWith("url:https://example.com/pointcloud.las");
+    expect(callback).toHaveBeenCalledWith("action:load-dataset", "url:https://example.com/pointcloud.las");
   });
 });

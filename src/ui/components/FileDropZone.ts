@@ -1,11 +1,10 @@
 import { FileService } from "../../services/FileService";
 import { createElement } from "../utils/dom";
+import { AppEvents } from "../../core/AppEvents";
 
 export class FileDropZone {
   public readonly element: HTMLElement;
   private btnOpen: HTMLButtonElement | null;
-  private miniBtnOpen: HTMLButtonElement | null;
-  private onFileOpenCallback: ((data: string | ArrayBuffer | File, fileName: string) => void) | null = null;
 
   constructor() {
     let el = document.getElementById("drop-overlay");
@@ -15,21 +14,16 @@ export class FileDropZone {
     this.element = el;
 
     this.btnOpen = document.getElementById("btn-open") as HTMLButtonElement | null;
-    this.miniBtnOpen = document.getElementById("quick-action-open") as HTMLButtonElement | null;
 
     this.bindEvents();
-  }
-
-  public onFileOpen(cb: (data: string | ArrayBuffer | File, fileName: string) => void): void {
-    this.onFileOpenCallback = cb;
   }
 
   private bindEvents(): void {
     const triggerPicker = async () => {
       try {
         const res = await FileService.openFilePicker();
-        if (!res.canceled && res.success && res.data && this.onFileOpenCallback) {
-          this.onFileOpenCallback(res.data, res.fileName || "custom.txt");
+        if (!res.canceled && res.success && res.data) {
+          AppEvents.emit("action:open-file", res.data, res.fileName || "custom.txt");
         }
       } catch (err) {
         console.error("Failed to open file dialog:", err);
@@ -37,10 +31,9 @@ export class FileDropZone {
     };
 
     if (!this.btnOpen) this.btnOpen = document.getElementById("btn-open") as HTMLButtonElement | null;
-    if (!this.miniBtnOpen) this.miniBtnOpen = document.getElementById("quick-action-open") as HTMLButtonElement | null;
-
     this.btnOpen?.addEventListener("click", triggerPicker);
-    this.miniBtnOpen?.addEventListener("click", triggerPicker);
+
+    AppEvents.on("action:trigger-file-picker", triggerPicker);
 
     if (typeof window !== "undefined") {
       window.addEventListener("dragover", (e) => {
@@ -57,9 +50,9 @@ export class FileDropZone {
       window.addEventListener("drop", (e) => {
         e.preventDefault();
         this.element.style.display = "none";
-        if (e.dataTransfer && e.dataTransfer.files.length > 0 && this.onFileOpenCallback) {
+        if (e.dataTransfer && e.dataTransfer.files.length > 0) {
           const file = e.dataTransfer.files[0];
-          this.onFileOpenCallback(file, file.name);
+          AppEvents.emit("action:open-file", file, file.name);
         }
       });
     }

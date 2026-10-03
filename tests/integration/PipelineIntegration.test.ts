@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import * as THREE from "three";
 import { SampleDatasets } from "../../src/services/SampleDatasets";
+import { ProceduralGenerator } from "../../src/services/ProceduralGenerator";
 import { TextParser } from "../../src/services/TextParser";
 import { PointCloud } from "../../src/core/PointCloud";
 import { MeasurementTool } from "../../src/tools/MeasurementTool";
@@ -10,11 +11,8 @@ import { ExportService } from "../../src/services/ExportService";
 describe("PipelineIntegration", () => {
   it("executes the full point cloud lifecycle: generate -> parse -> 3D cloud -> voxel filter -> measure -> slice -> export -> re-parse", async () => {
     // 1. Procedural Generation
-    const rawData = SampleDatasets.generateUrbanCity();
-    expect(rawData.length).toBeGreaterThan(100);
-
-    // 2. Text Parsing
-    const parsed = TextParser.parse(rawData);
+    const parsed = ProceduralGenerator.generate("urban-city", 50000);
+    expect(parsed).not.toBeNull();
     expect(parsed).not.toBeNull();
     if (!parsed) return;
 

@@ -1,13 +1,27 @@
 import * as THREE from "three";
 import { Viewer } from "../core/Viewer";
 import { InspectedPoint } from "../types";
+import { GeoCoordinates } from "../utils/GeoCoordinates";
+import { ITool } from "./ITool";
 
-export class InspectorTool {
+export class InspectorTool implements ITool {
+  public readonly id = "inspect" as const;
+  public readonly cursor = "crosshair";
+  public readonly allowsOrbit = true;
+
   private viewer: Viewer;
   private onInspectCallback: ((point: InspectedPoint | null) => void) | null = null;
 
   constructor(viewer: Viewer) {
     this.viewer = viewer;
+  }
+
+  public activate(): void {
+    this.clear();
+  }
+
+  public deactivate(): void {
+    this.clear();
   }
 
   public onInspect(cb: (point: InspectedPoint | null) => void): void {
@@ -19,9 +33,12 @@ export class InspectorTool {
 
     if (intersectedPoint && this.viewer.pointCloud) {
       const center = this.viewer.pointCloud.data.center;
-      const realX = intersectedPoint.x + center[0];
-      const realElevation = intersectedPoint.y + center[1];
-      const realNorthing = intersectedPoint.z + center[2];
+      const [realX, realNorthing, realElevation] = GeoCoordinates.toWorld(
+        intersectedPoint.x,
+        intersectedPoint.y,
+        intersectedPoint.z,
+        center
+      );
 
       this.onInspectCallback({
         realX,

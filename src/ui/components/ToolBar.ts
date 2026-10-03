@@ -2,6 +2,7 @@ import { ToolManager } from "../../tools/ToolManager";
 import { Viewer } from "../../core/Viewer";
 import { ToolMode } from "../../types";
 import { createElement } from "../utils/dom";
+import { AppEvents } from "../../core/AppEvents";
 
 export class ToolBar {
   public readonly element: HTMLElement;
@@ -15,9 +16,6 @@ export class ToolBar {
 
   // Full view buttons in sidebar panel
   private toolButtons: Partial<Record<ToolMode, HTMLButtonElement | null>> = {};
-
-  // Minified view icon buttons in quick toolbar
-  private miniToolButtons: Partial<Record<ToolMode, HTMLButtonElement | null>> = {};
 
   constructor(viewer: Viewer, toolManager: ToolManager) {
     this.viewer = viewer;
@@ -53,13 +51,11 @@ export class ToolBar {
 
   public setMode(tool: ToolMode): void {
     this.toolManager.setMode(tool);
+    AppEvents.emit("ui:tool-mode-changed", tool);
 
-    // Update active state in both full panel tabs and minified quick toolbar icons
     (["orbit", "measure", "profile", "inspect", "fly"] as ToolMode[]).forEach((mode) => {
       const fullBtn = this.toolButtons[mode];
-      const miniBtn = this.miniToolButtons[mode];
       if (fullBtn) fullBtn.classList.toggle("active", mode === tool);
-      if (miniBtn) miniBtn.classList.toggle("active", mode === tool);
     });
 
     if (this.flyHint) {
@@ -72,7 +68,7 @@ export class ToolBar {
 
     if (tool === "fly") {
       if (this.viewer.getOrthoMode()) {
-        this.viewer.setOrthoMode(false);
+        AppEvents.emit("action:toggle-ortho", false);
       }
       if (this.toggleOrtho) {
         this.toggleOrtho.checked = false;
@@ -103,14 +99,16 @@ export class ToolBar {
   private initButtons(): void {
     (["orbit", "measure", "profile", "inspect", "fly"] as ToolMode[]).forEach((mode) => {
       this.toolButtons[mode] = this.element.querySelector(`#tool-${mode}`) || (document.getElementById(`tool-${mode}`) as HTMLButtonElement | null);
-      this.miniToolButtons[mode] = document.getElementById(`quick-tool-${mode}`) as HTMLButtonElement | null;
     });
   }
 
   private bindEvents(): void {
     (["orbit", "measure", "profile", "inspect", "fly"] as ToolMode[]).forEach((tool) => {
-      this.toolButtons[tool]?.addEventListener("click", () => this.setMode(tool));
-      this.miniToolButtons[tool]?.addEventListener("click", () => this.setMode(tool));
+      this.toolButtons[tool]?.addEventListener("click", () => AppEvents.emit("action:set-tool-mode", tool));
+    });
+
+    AppEvents.on("action:set-tool-mode", (tool: ToolMode) => {
+      this.setMode(tool);
     });
 
     if (this.viewer.firstPersonControls?.onSpeedChange) {

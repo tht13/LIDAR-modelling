@@ -1,5 +1,6 @@
 import { fromBlob, fromArrayBuffer, GeoTIFF, GeoTIFFImage } from "geotiff";
 import { ParseResult } from "../types";
+import { GeoCoordinates } from "../utils/GeoCoordinates";
 
 export class GeoTIFFParser {
   /**
@@ -142,9 +143,7 @@ export class GeoTIFFParser {
 
     if (onProgress) onProgress(85, "Packing 3D coordinates...");
 
-    const centerX = (minX_m + maxX_m) / 2;
-    const centerY = (minY_m + maxY_m) / 2;
-    const centerZ = (minZ + maxZ) / 2;
+    const bounds = GeoCoordinates.computeBounds(minX_m, maxX_m, minY_m, maxY_m, minZ, maxZ);
     const zSpan = maxZ - minZ || 1.0;
 
     const positions = new Float32Array(validCount * 3);
@@ -156,16 +155,17 @@ export class GeoTIFFParser {
       const ry = tempY[i];
       const rz = tempZ[i];
 
-      // Coordinate mapping: Three.js (X, Y=Elev, Z=Northing)
-      positions[i * 3] = rx - centerX;
-      positions[i * 3 + 1] = rz - centerZ;
-      positions[i * 3 + 2] = ry - centerY;
+      // Coordinate mapping: Three.js (X = East, Y = Elev, Z = Northing)
+      const [lx, ly, lz] = GeoCoordinates.toLocal(rx, ry, rz, bounds.center);
+      positions[i * 3] = lx;
+      positions[i * 3 + 1] = ly;
+      positions[i * 3 + 2] = lz;
 
       colors[i * 3] = 1.0;
       colors[i * 3 + 1] = 1.0;
       colors[i * 3 + 2] = 1.0;
 
-      elevations[i] = (rz - minZ) / zSpan;
+      elevations[i] = GeoCoordinates.normalizeElevation(rz, minZ, zSpan);
     }
 
     if (onProgress) onProgress(98, "Ready to render");
@@ -178,10 +178,10 @@ export class GeoTIFFParser {
       totalPoints: totalPixels,
       subsampled: step > 1,
       stride: step,
-      min: [minX_m, minZ, minY_m],
-      max: [maxX_m, maxZ, maxY_m],
-      center: [centerX, centerZ, centerY],
-      size: [maxX_m - minX_m, maxZ - minZ, maxY_m - minY_m],
+      min: bounds.min,
+      max: bounds.max,
+      center: bounds.center,
+      size: bounds.size,
       hasRGB: false
     };
   }

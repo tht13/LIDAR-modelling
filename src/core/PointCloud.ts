@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { pointVertexShader, pointFragmentShader } from "../shaders/pointShaders";
 import { ParseResult, ColorMode } from "../types";
+import { GeoCoordinates } from "../utils/GeoCoordinates";
 
 export class PointCloud {
   public readonly mesh: THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial>;
@@ -110,6 +111,36 @@ export class PointCloud {
   public getActivePointCount(): number {
     const index = this.geometry.getIndex();
     return index ? index.count : this.data.count;
+  }
+
+  /**
+   * Iterates through active points (filtered or full cloud) and invokes callback with world GIS coordinates and colors.
+   */
+  public forEachActivePoint(
+    cb: (worldX: number, worldY: number, worldZ: number, r: number, g: number, b: number, index: number) => void,
+    onlyActive: boolean = true
+  ): number {
+    const pos = this.data.positions;
+    const colors = this.data.colors;
+    const center = this.data.center;
+
+    const indexAttr = this.geometry.getIndex();
+    const useIndices = onlyActive && indexAttr !== null;
+    const count = useIndices ? indexAttr.count : this.data.count;
+
+    for (let i = 0; i < count; i++) {
+      const idx = useIndices ? indexAttr.getX(i) : i;
+      const pIdx = idx * 3;
+
+      const [realX, realY, realZ] = GeoCoordinates.toWorld(pos[pIdx], pos[pIdx + 1], pos[pIdx + 2], center);
+      const r = colors[pIdx] || 1.0;
+      const g = colors[pIdx + 1] || 1.0;
+      const b = colors[pIdx + 2] || 1.0;
+
+      cb(realX, realY, realZ, r, g, b, idx);
+    }
+
+    return count;
   }
 
   public getBoundingSphere(): THREE.Sphere | null {

@@ -78,4 +78,25 @@ describe("ToolManager", () => {
     expect(viewer.renderer.domElement.style.cursor).toBe("default");
     expect(viewer.controls.enabled).toBe(true);
   });
+
+  it("handles pointermove, pointerleave, and pointerdown events without errors", () => {
+    const viewer = createMockViewer();
+    const manager = new ToolManager(viewer);
+
+    manager.setMode("inspect");
+    const dom = viewer.renderer.domElement;
+
+    // Dispatch pointermove
+    const moveEvt = new MouseEvent("pointermove", { clientX: 100, clientY: 100 }) as PointerEvent;
+    dom.dispatchEvent(moveEvt);
+
+    // Dispatch pointerleave
+    const leaveEvt = new MouseEvent("pointerleave") as PointerEvent;
+    dom.dispatchEvent(leaveEvt);
+
+    // Dispatch pointerdown in measure mode
+    manager.setMode("measure");
+    const downEvt = new MouseEvent("pointerdown", { button: 0, clientX: 50, clientY: 50 }) as PointerEvent;
+    dom.dispatchEvent(downEvt);
+  });
 });

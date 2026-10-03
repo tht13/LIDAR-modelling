@@ -120,6 +120,31 @@ describe("PointCloud", () => {
     });
   });
 
+  it("iterates through active points with forEachActivePoint", () => {
+    const data = createMockParseResult(10);
+    const pc = new PointCloud(data);
+
+    let iterated = 0;
+    const count = pc.forEachActivePoint((x, y, z, r, g, b, idx) => {
+      iterated++;
+      expect(idx).toBeDefined();
+      expect(x).toBeGreaterThan(0); // Translated by center
+    });
+
+    expect(count).toBe(10);
+    expect(iterated).toBe(10);
+
+    // Now test with decimation filter
+    pc.applyDecimation(0.5);
+    let filteredIterated = 0;
+    const filteredCount = pc.forEachActivePoint(() => {
+      filteredIterated++;
+    }, true);
+
+    expect(filteredCount).toBe(5);
+    expect(filteredIterated).toBe(5);
+  });
+
   it("disposes geometry and material cleanly", () => {
     const data = createMockParseResult(10);
     const pc = new PointCloud(data);

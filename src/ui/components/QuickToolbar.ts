@@ -1,4 +1,5 @@
 import { createElement } from "../utils/dom";
+import { AppEvents } from "../../core/AppEvents";
 
 export class QuickToolbar {
   public readonly element: HTMLElement;
@@ -17,6 +18,31 @@ export class QuickToolbar {
       if (this.onExpandCallback) {
         this.onExpandCallback();
       }
+    });
+
+    this.element.querySelector("#quick-cam-iso")?.addEventListener("click", () => AppEvents.emit("action:camera-preset", "iso"));
+    this.element.querySelector("#quick-cam-top")?.addEventListener("click", () => AppEvents.emit("action:camera-preset", "top"));
+    this.element.querySelector("#quick-toggle-edl")?.addEventListener("click", () => AppEvents.emit("action:toggle-edl"));
+    this.element.querySelector("#quick-toggle-ortho")?.addEventListener("click", () => AppEvents.emit("action:toggle-ortho"));
+    this.element.querySelector("#quick-action-snapshot")?.addEventListener("click", () => AppEvents.emit("action:snapshot"));
+    this.element.querySelector("#quick-action-open")?.addEventListener("click", () => AppEvents.emit("action:trigger-file-picker"));
+
+    (["orbit", "measure", "profile", "inspect", "fly"] as const).forEach(tool => {
+      this.element.querySelector(`#quick-tool-${tool}`)?.addEventListener("click", () => AppEvents.emit("action:set-tool-mode", tool));
+    });
+
+    AppEvents.on("ui:edl-toggled", (enabled: boolean) => {
+      this.element.querySelector("#quick-toggle-edl")?.classList.toggle("active", enabled);
+    });
+
+    AppEvents.on("ui:ortho-toggled", (enabled: boolean) => {
+      this.element.querySelector("#quick-toggle-ortho")?.classList.toggle("active", enabled);
+    });
+
+    AppEvents.on("ui:tool-mode-changed", (mode: string) => {
+      (["orbit", "measure", "profile", "inspect", "fly"] as const).forEach(tool => {
+        this.element.querySelector(`#quick-tool-${tool}`)?.classList.toggle("active", tool === mode);
+      });
     });
   }
 

@@ -1,33 +1,22 @@
 import * as THREE from "three";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { PointCloud } from "./PointCloud";
 import { EDLPass } from "../shaders/EDLPass";
 import { CameraPreset } from "../types";
 import { FirstPersonControls } from "../tools/FirstPersonControls";
+import { CameraManager } from "./CameraManager";
 
 export class Viewer {
   public readonly scene: THREE.Scene;
   public readonly renderer: THREE.WebGLRenderer;
-  public readonly perspCamera: THREE.PerspectiveCamera;
-  public readonly orthoCamera: THREE.OrthographicCamera;
-  public activeCamera: THREE.Camera;
-  public readonly controls: OrbitControls;
+  public readonly cameraManager: CameraManager;
   public readonly firstPersonControls: FirstPersonControls;
   public readonly gridHelper: THREE.GridHelper;
   public readonly edlPass: EDLPass;
   public pointCloud: PointCloud | null = null;
-  private isOrthoMode: boolean = false;
 
   constructor(container?: HTMLElement) {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x121214);
-
-    const aspect = window.innerWidth / window.innerHeight;
-    this.perspCamera = new THREE.PerspectiveCamera(60, aspect, 0.1, 50000);
-    this.perspCamera.position.set(0, 500, 1000);
-
-    this.orthoCamera = new THREE.OrthographicCamera(-500 * aspect, 500 * aspect, 500, -500, -50000, 50000);
-    this.activeCamera = this.perspCamera;
 
     this.renderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -48,10 +37,7 @@ export class Viewer {
     const targetMount = container || document.getElementById("canvas-container") || document.body;
     targetMount.appendChild(this.renderer.domElement);
 
-    this.controls = new OrbitControls(this.activeCamera, this.renderer.domElement);
-    this.controls.enableDamping = true;
-    this.controls.dampingFactor = 0.05;
-
+    this.cameraManager = new CameraManager(this.renderer.domElement, window.innerWidth, window.innerHeight);
     this.firstPersonControls = new FirstPersonControls(this);
 
     // Lighting
@@ -69,6 +55,10 @@ export class Viewer {
     window.addEventListener("resize", () => this.handleResize());
     this.animate();
   }
+
+  // Getters for legacy tools
+  public get activeCamera(): THREE.Camera { return this.cameraManager.activeCamera; }
+  public get controls() { return this.cameraManager.controls; }
 
   public setPointCloud(pc: PointCloud): void {
     if (this.pointCloud) {
@@ -105,87 +95,15 @@ export class Viewer {
   }
 
   public setOrthoMode(useOrtho: boolean): void {
-    this.isOrthoMode = useOrtho;
-    const aspect = window.innerWidth / window.innerHeight;
-    const currentPos = this.activeCamera.position.clone();
-    const currentTarget = this.controls.target.clone();
-    const sphere = this.pointCloud?.getBoundingSphere();
-    const radius = sphere ? Math.max(10, sphere.radius) : 500;
-
-    if (useOrtho) {
-      const dist = currentPos.distanceTo(currentTarget);
-      const orthoH = Math.max(dist * 0.6, radius * 0.8);
-      this.orthoCamera.left = -orthoH * aspect;
-      this.orthoCamera.right = orthoH * aspect;
-      this.orthoCamera.top = orthoH;
-      this.orthoCamera.bottom = -orthoH;
-      this.orthoCamera.near = -Math.max(50000, radius * 10);
-      this.orthoCamera.far = Math.max(50000, radius * 10);
-      this.orthoCamera.position.copy(currentPos);
-      this.orthoCamera.lookAt(currentTarget);
-      this.orthoCamera.updateProjectionMatrix();
-
-      this.activeCamera = this.orthoCamera;
-    } else {
-      this.perspCamera.near = Math.max(0.1, radius / 5000);
-      this.perspCamera.far = Math.max(50000, radius * 30);
-      this.perspCamera.position.copy(currentPos);
-      this.perspCamera.lookAt(currentTarget);
-      this.perspCamera.updateProjectionMatrix();
-
-      this.activeCamera = this.perspCamera;
-    }
-
-    this.controls.object = this.activeCamera;
-    if (this.pointCloud) {
-      this.pointCloud.setIsOrtho(useOrtho);
-    }
+    this.cameraManager.setOrthoMode(useOrtho, this.pointCloud);
   }
 
   public getOrthoMode(): boolean {
-    return this.isOrthoMode;
+    return this.cameraManager.getOrthoMode();
   }
 
   public setCameraPreset(preset: CameraPreset): void {
-    if (!this.pointCloud) return;
-    const sphere = this.pointCloud.getBoundingSphere();
-    if (!sphere) return;
-
-    const radius = Math.max(10, sphere.radius);
-    this.controls.target.set(0, 0, 0);
-
-    // Dynamically adjust camera clipping planes and distances for datasets of any size (from 10m to 1,000,000m)
-    this.perspCamera.near = Math.max(0.1, radius / 5000);
-    this.perspCamera.far = Math.max(100000, radius * 30);
-    this.perspCamera.updateProjectionMatrix();
-
-    this.orthoCamera.near = -Math.max(50000, radius * 10);
-    this.orthoCamera.far = Math.max(50000, radius * 10);
-    this.orthoCamera.updateProjectionMatrix();
-
-    if (preset === "top") {
-      this.activeCamera.position.set(0, radius * 2.0, 0);
-    } else if (preset === "front") {
-      this.activeCamera.position.set(0, 0, radius * 2.0);
-    } else if (preset === "side") {
-      this.activeCamera.position.set(radius * 2.0, 0, 0);
-    } else {
-      this.activeCamera.position.set(radius * 0.9, radius * 0.9, radius * 1.4);
-    }
-
-    this.activeCamera.lookAt(0, 0, 0);
-    this.controls.maxDistance = radius * 35;
-    this.controls.update();
-
-    if (this.activeCamera instanceof THREE.OrthographicCamera) {
-      const aspect = window.innerWidth / window.innerHeight;
-      const orthoH = radius * 1.2;
-      this.orthoCamera.left = -orthoH * aspect;
-      this.orthoCamera.right = orthoH * aspect;
-      this.orthoCamera.top = orthoH;
-      this.orthoCamera.bottom = -orthoH;
-      this.orthoCamera.updateProjectionMatrix();
-    }
+    this.cameraManager.setCameraPreset(preset, this.pointCloud);
   }
 
   public exportSnapshot(): void {
@@ -198,17 +116,7 @@ export class Viewer {
   }
 
   private handleResize(): void {
-    const aspect = window.innerWidth / window.innerHeight;
-    this.perspCamera.aspect = aspect;
-    this.perspCamera.updateProjectionMatrix();
-
-    if (this.activeCamera instanceof THREE.OrthographicCamera) {
-      const h = (this.orthoCamera.top - this.orthoCamera.bottom) / 2;
-      this.orthoCamera.left = -h * aspect;
-      this.orthoCamera.right = h * aspect;
-      this.orthoCamera.updateProjectionMatrix();
-    }
-
+    this.cameraManager.resize(window.innerWidth, window.innerHeight);
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.edlPass.setSize(window.innerWidth, window.innerHeight);
@@ -219,7 +127,7 @@ export class Viewer {
     if (this.firstPersonControls && this.firstPersonControls.isEnabled()) {
       this.firstPersonControls.update();
     } else {
-      this.controls.update();
+      this.cameraManager.update();
     }
     this.edlPass.render(this.renderer, this.scene, this.activeCamera);
   };

@@ -1,7 +1,8 @@
 import { Viewer } from "../../core/Viewer";
-import { ColorMode } from "../../types";
+import { ColorMode, CameraPreset } from "../../types";
 import { ExportService } from "../../services/ExportService";
 import { createElement } from "../utils/dom";
+import { AppEvents } from "../../core/AppEvents";
 
 export class RenderSettingsPanel {
   public readonly element: HTMLElement;
@@ -31,17 +32,6 @@ export class RenderSettingsPanel {
   private selectImportBudget: HTMLSelectElement | null;
   private importBudgetVal: HTMLElement | null;
 
-  // Minified view DOM elements (quick toolbar)
-  private miniToggleEDL: HTMLButtonElement | null;
-  private miniToggleOrtho: HTMLButtonElement | null;
-  private miniCamIso: HTMLButtonElement | null;
-  private miniCamTop: HTMLButtonElement | null;
-  private miniSnapshot: HTMLButtonElement | null;
-
-  private onImportBudgetCallback: ((budget: number) => void) | null = null;
-  private onFilterChangeCallback: ((activeCount: number, totalCount: number, pct: number) => void) | null = null;
-  private getFileNameCallback: (() => string) | null = null;
-
   constructor(viewer: Viewer) {
     this.viewer = viewer;
 
@@ -56,7 +46,6 @@ export class RenderSettingsPanel {
     }
     this.element = el;
 
-    // Full sidebar elements scoped to element with document fallback
     const find = <T extends HTMLElement>(selector: string): T | null => {
       return (this.element.querySelector(selector) || document.querySelector(selector)) as T | null;
     };
@@ -84,26 +73,7 @@ export class RenderSettingsPanel {
     this.selectImportBudget = find<HTMLSelectElement>("#select-import-budget");
     this.importBudgetVal = find<HTMLElement>("#import-budget-val");
 
-    // Minified quick toolbar elements
-    this.miniToggleEDL = document.getElementById("quick-toggle-edl") as HTMLButtonElement | null;
-    this.miniToggleOrtho = document.getElementById("quick-toggle-ortho") as HTMLButtonElement | null;
-    this.miniCamIso = document.getElementById("quick-cam-iso") as HTMLButtonElement | null;
-    this.miniCamTop = document.getElementById("quick-cam-top") as HTMLButtonElement | null;
-    this.miniSnapshot = document.getElementById("quick-action-snapshot") as HTMLButtonElement | null;
-
     this.bindEvents();
-  }
-
-  public onImportBudgetChange(cb: (budget: number) => void): void {
-    this.onImportBudgetCallback = cb;
-  }
-
-  public onFilterChange(cb: (activeCount: number, totalCount: number, pct: number) => void): void {
-    this.onFilterChangeCallback = cb;
-  }
-
-  public setFileNameProvider(cb: () => string): void {
-    this.getFileNameCallback = cb;
   }
 
   public getImportBudget(): number {
@@ -128,27 +98,40 @@ export class RenderSettingsPanel {
     this.viewer.setEDLEnabled(enabled);
     if (this.toggleEDL) this.toggleEDL.checked = enabled;
     if (this.edlStrengthGroup) this.edlStrengthGroup.style.display = enabled ? "flex" : "none";
-    if (this.miniToggleEDL) this.miniToggleEDL.classList.toggle("active", enabled);
+    AppEvents.emit("ui:edl-toggled", enabled);
   }
 
   public setOrthoMode(useOrtho: boolean): void {
     this.viewer.setOrthoMode(useOrtho);
     if (this.toggleOrtho) this.toggleOrtho.checked = useOrtho;
-    if (this.miniToggleOrtho) this.miniToggleOrtho.classList.toggle("active", useOrtho);
+    AppEvents.emit("ui:ortho-toggled", useOrtho);
   }
 
   private bindEvents(): void {
-    // Full Eye-Dome Lighting (EDL) Toggle
+    AppEvents.on("ui:colormap-changed", (mode: ColorMode) => {
+      this.setColormapValue(mode);
+    });
+
+    AppEvents.on("action:toggle-edl", () => {
+      this.setEDLEnabled(!this.viewer.edlPass.enabled);
+    });
+    
+    AppEvents.on("action:toggle-ortho", () => {
+      this.setOrthoMode(!this.viewer.getOrthoMode());
+    });
+
+    AppEvents.on("action:camera-preset", (preset: CameraPreset) => {
+      this.viewer.setCameraPreset(preset);
+    });
+
+    AppEvents.on("action:snapshot", () => {
+      this.viewer.exportSnapshot();
+    });
+
     this.toggleEDL?.addEventListener("change", () => {
       this.setEDLEnabled(!!this.toggleEDL?.checked);
     });
 
-    // Minified EDL Toggle in Quick Toolbar
-    this.miniToggleEDL?.addEventListener("click", () => {
-      this.setEDLEnabled(!this.viewer.edlPass.enabled);
-    });
-
-    // EDL Strength Slider
     this.sliderEDL?.addEventListener("input", () => {
       if (!this.sliderEDL) return;
       const val = parseFloat(this.sliderEDL.value);
@@ -158,14 +141,12 @@ export class RenderSettingsPanel {
       this.viewer.setEDLStrength(val);
     });
 
-    // Colormap selection
     this.selectColormap?.addEventListener("change", () => {
       if (this.viewer.pointCloud && this.selectColormap) {
         this.viewer.pointCloud.setColorMode(parseInt(this.selectColormap.value, 10));
       }
     });
 
-    // Point size slider
     this.sliderSize?.addEventListener("input", () => {
       if (!this.sliderSize) return;
       const size = parseFloat(this.sliderSize.value);
@@ -177,7 +158,6 @@ export class RenderSettingsPanel {
       }
     });
 
-    // Background brightness slider
     this.sliderBg?.addEventListener("input", () => {
       if (!this.sliderBg) return;
       const val = parseFloat(this.sliderBg.value);
@@ -187,7 +167,6 @@ export class RenderSettingsPanel {
       }
     });
 
-    // Voxel Downsampling Filter
     this.selectVoxelFilter?.addEventListener("change", () => {
       if (!this.selectVoxelFilter) return;
       const voxelSize = parseFloat(this.selectVoxelFilter.value);
@@ -201,13 +180,10 @@ export class RenderSettingsPanel {
         if (this.voxelFilterVal) {
           this.voxelFilterVal.textContent = voxelSize > 0 ? `${voxelSize}m (${pct}%)` : "Off (100%)";
         }
-        if (this.onFilterChangeCallback) {
-          this.onFilterChangeCallback(activeCount, total, pct);
-        }
+        AppEvents.emit("ui:filter-change", activeCount, total, pct);
       }
     });
 
-    // Decimation Density Slider
     this.sliderDecimation?.addEventListener("input", () => {
       if (!this.sliderDecimation) return;
       const pctVal = parseInt(this.sliderDecimation.value, 10);
@@ -222,56 +198,44 @@ export class RenderSettingsPanel {
         const activeCount = this.viewer.pointCloud.applyDecimation(ratio);
         const total = this.viewer.pointCloud.data.count;
         const pct = Math.round((activeCount / total) * 100);
-        if (this.onFilterChangeCallback) {
-          this.onFilterChangeCallback(activeCount, total, pct);
-        }
+        AppEvents.emit("ui:filter-change", activeCount, total, pct);
       }
     });
 
-    // Reference grid toggle
     this.toggleGrid?.addEventListener("change", () => {
       if (this.toggleGrid) {
         this.viewer.setGridVisible(this.toggleGrid.checked);
       }
     });
 
-    // Full Orthographic toggle
     this.toggleOrtho?.addEventListener("change", () => {
       if (this.toggleOrtho) {
         this.setOrthoMode(this.toggleOrtho.checked);
       }
     });
 
-    // Minified Orthographic toggle in Quick Toolbar
-    this.miniToggleOrtho?.addEventListener("click", () => {
-      this.setOrthoMode(!this.viewer.getOrthoMode());
-    });
-
-    // Camera preset buttons (Full sidebar)
     (this.element.querySelector("#btn-view-top") || document.getElementById("btn-view-top"))?.addEventListener("click", () => this.viewer.setCameraPreset("top"));
     (this.element.querySelector("#btn-view-front") || document.getElementById("btn-view-front"))?.addEventListener("click", () => this.viewer.setCameraPreset("front"));
     (this.element.querySelector("#btn-view-side") || document.getElementById("btn-view-side"))?.addEventListener("click", () => this.viewer.setCameraPreset("side"));
     (this.element.querySelector("#btn-view-reset") || document.getElementById("btn-view-reset"))?.addEventListener("click", () => this.viewer.setCameraPreset("iso"));
 
-    // Camera preset buttons (Minified quick toolbar)
-    this.miniCamIso?.addEventListener("click", () => this.viewer.setCameraPreset("iso"));
-    this.miniCamTop?.addEventListener("click", () => this.viewer.setCameraPreset("top"));
-
-    // Snapshot button (Both Full & Minified)
     this.btnSnapshot?.addEventListener("click", () => this.viewer.exportSnapshot());
-    this.miniSnapshot?.addEventListener("click", () => this.viewer.exportSnapshot());
 
     // Export buttons
     (this.element.querySelector("#btn-export-ply") || document.getElementById("btn-export-ply"))?.addEventListener("click", () => {
       if (!this.viewer.pointCloud) return;
-      const baseName = ((this.getFileNameCallback ? this.getFileNameCallback() : "") || "pointcloud").replace(/\.[^/.]+$/, "");
+      let fileName = "pointcloud";
+      AppEvents.emit("action:request-filename", (name: string) => { fileName = name; });
+      const baseName = fileName.replace(/\.[^/.]+$/, "");
       const blob = ExportService.exportToPLY(this.viewer.pointCloud, true);
       ExportService.saveBlob(blob, `${baseName}-export.ply`);
     });
 
     (this.element.querySelector("#btn-export-xyz") || document.getElementById("btn-export-xyz"))?.addEventListener("click", () => {
       if (!this.viewer.pointCloud) return;
-      const baseName = ((this.getFileNameCallback ? this.getFileNameCallback() : "") || "pointcloud").replace(/\.[^/.]+$/, "");
+      let fileName = "pointcloud";
+      AppEvents.emit("action:request-filename", (name: string) => { fileName = name; });
+      const baseName = fileName.replace(/\.[^/.]+$/, "");
       const blob = ExportService.exportToXYZ(this.viewer.pointCloud, true);
       ExportService.saveBlob(blob, `${baseName}-export.xyz`);
     });
@@ -289,9 +253,7 @@ export class RenderSettingsPanel {
           this.importBudgetVal.textContent = `${budget.toLocaleString()}`;
         }
       }
-      if (this.onImportBudgetCallback) {
-        this.onImportBudgetCallback(budget);
-      }
+      AppEvents.emit("ui:import-budget-changed", budget);
     });
   }
 

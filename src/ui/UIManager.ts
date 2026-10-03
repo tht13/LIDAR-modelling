@@ -12,6 +12,7 @@ import { FileDropZone } from "./components/FileDropZone";
 import { StatusView } from "./components/StatusView";
 import { QuickToolbar } from "./components/QuickToolbar";
 import { createElement } from "./utils/dom";
+import { AppEvents } from "../core/AppEvents";
 
 export class UIManager {
   private viewer: Viewer;
@@ -86,40 +87,8 @@ export class UIManager {
     this.bindToolCallbacks();
   }
 
-  public onFileOpen(cb: (data: string | ArrayBuffer | File, fileName: string) => void): void {
-    this.fileDropZone.onFileOpen(cb);
-  }
-
-  public onDatasetSelect(cb: (datasetId: string) => void): void {
-    this.datasetSelector.onSelect(cb);
-  }
-
   public getImportBudget(): number {
     return this.renderSettingsPanel.getImportBudget();
-  }
-
-  public onImportBudgetChange(cb: (budget: number) => void): void {
-    this.renderSettingsPanel.onImportBudgetChange(cb);
-  }
-
-  public updateStatus(fileName: string, statusText: string, boundsText: string = ""): void {
-    this.statusView.updateStatus(fileName, statusText, boundsText);
-  }
-
-  public setProgress(percent: number | null): void {
-    this.statusView.setProgress(percent);
-  }
-
-  public setColormapValue(mode: ColorMode): void {
-    this.renderSettingsPanel.setColormapValue(mode);
-  }
-
-  public setDatasetValue(id: string): void {
-    this.datasetSelector.setValue(id);
-  }
-
-  public addImportedDataset(id: string, name: string): void {
-    this.datasetSelector.addImportedDataset(id, name);
   }
 
   public getPointSize(): number {
@@ -163,13 +132,12 @@ export class UIManager {
       this.toolManager.measurementTool.resetToIdle();
     });
 
-    this.renderSettingsPanel.setFileNameProvider(() => {
-      return this.statusView.getFileName();
-    });
-
-    this.renderSettingsPanel.onFilterChange((activeCount, total, pct) => {
-      this.statusView.updateStatus(
-        this.statusView.getFileName(),
+    AppEvents.on("ui:filter-change", (activeCount: number, total: number, pct: number) => {
+      let fileName = "pointcloud";
+      AppEvents.emit("action:request-filename", (name: string) => { fileName = name; });
+      AppEvents.emit(
+        "ui:status-update",
+        fileName,
         `${activeCount.toLocaleString()} / ${total.toLocaleString()} pts (${pct}%)`
       );
     });
@@ -221,7 +189,9 @@ export class UIManager {
       if (data && data.points.length > 0) {
         this.profileChart.render(data);
       } else if (statusText) {
-        this.updateStatus(this.statusView.getFileName(), statusText);
+        let fileName = "pointcloud";
+        AppEvents.emit("action:request-filename", (name: string) => { fileName = name; });
+        AppEvents.emit("ui:status-update", fileName, statusText);
       }
     });
 

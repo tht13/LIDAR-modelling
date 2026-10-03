@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { SampleDatasets } from "../../src/services/SampleDatasets";
 import { TextParser } from "../../src/services/TextParser";
 import { LASParser } from "../../src/services/LASParser";
+import { ProceduralGenerator } from "../../src/services/ProceduralGenerator";
 
 describe("SampleDatasets", () => {
   it("defines a list with unique IDs and valid dataset configs", () => {
@@ -17,20 +18,15 @@ describe("SampleDatasets", () => {
 
       if (dataset.type === "file") {
         expect(dataset.url).toBeTruthy();
-      } else if (dataset.type === "generator") {
-        expect(typeof dataset.generate).toBe("function");
       } else if (dataset.type === "binary") {
         expect(typeof dataset.generateBinary).toBe("function");
       }
     }
   });
 
-  describe("procedural generators output valid parseable point clouds", () => {
+  describe("procedural generators output valid point clouds directly", () => {
     it("generateUrbanCity generates valid point cloud", () => {
-      const text = SampleDatasets.generateUrbanCity();
-      expect(text.length).toBeGreaterThan(100);
-
-      const parsed = TextParser.parse(text);
+      const parsed = ProceduralGenerator.generate("urban-city", 5000);
       expect(parsed).not.toBeNull();
       if (!parsed) return;
 
@@ -41,10 +37,7 @@ describe("SampleDatasets", () => {
     });
 
     it("generateForestCanyon generates valid terrain and trees", () => {
-      const text = SampleDatasets.generateForestCanyon();
-      expect(text.length).toBeGreaterThan(100);
-
-      const parsed = TextParser.parse(text);
+      const parsed = ProceduralGenerator.generate("forest-canyon", 5000);
       expect(parsed).not.toBeNull();
       if (!parsed) return;
 
@@ -53,10 +46,7 @@ describe("SampleDatasets", () => {
     });
 
     it("generateDome generates valid dome and colonnade geometry", () => {
-      const text = SampleDatasets.generateDome();
-      expect(text.length).toBeGreaterThan(100);
-
-      const parsed = TextParser.parse(text);
+      const parsed = ProceduralGenerator.generate("monument-dome", 5000);
       expect(parsed).not.toBeNull();
       if (!parsed) return;
 
@@ -65,10 +55,7 @@ describe("SampleDatasets", () => {
     });
 
     it("generateNorwayFjord generates valid fjord and cliff coordinates", () => {
-      const text = SampleDatasets.generateNorwayFjord();
-      expect(text.length).toBeGreaterThan(100);
-
-      const parsed = TextParser.parse(text);
+      const parsed = ProceduralGenerator.generate("norway-fjord", 5000);
       expect(parsed).not.toBeNull();
       if (!parsed) return;
 

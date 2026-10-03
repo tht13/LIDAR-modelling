@@ -14,8 +14,10 @@ describe("FirstPersonControls", () => {
         enabled: true,
         target: new THREE.Vector3(0, 0, 0)
       },
-      perspCamera,
-      activeCamera: perspCamera,
+      cameraManager: {
+        perspCamera,
+        activeCamera: perspCamera
+      },
       getOrthoMode: () => false,
       setOrthoMode: vi.fn()
     } as any;
@@ -47,7 +49,7 @@ describe("FirstPersonControls", () => {
     const controls = new FirstPersonControls(viewer);
     controls.setEnabled(true);
 
-    const initialZ = viewer.perspCamera.position.z;
+    const initialZ = viewer.cameraManager.perspCamera.position.z;
 
     // Press 'KeyW' (forward)
     window.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyW" }));
@@ -59,7 +61,7 @@ describe("FirstPersonControls", () => {
     window.dispatchEvent(new KeyboardEvent("keyup", { code: "KeyW" }));
 
     // Position changed along view direction
-    expect(viewer.perspCamera.position.z).not.toBe(initialZ);
+    expect(viewer.cameraManager.perspCamera.position.z).not.toBe(initialZ);
   });
 
   it("adjusts flying speed with mouse wheel events when enabled", () => {

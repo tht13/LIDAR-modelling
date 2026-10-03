@@ -1,9 +1,11 @@
 import * as THREE from "three";
 import { Viewer } from "../core/Viewer";
 import { ToolMode } from "../types";
+import { ITool } from "./ITool";
 import { MeasurementTool } from "./MeasurementTool";
 import { InspectorTool } from "./InspectorTool";
 import { ProfileTool } from "./ProfileTool";
+import { AppEvents } from "../core/AppEvents";
 
 export class ToolManager {
   public readonly measurementTool: MeasurementTool;
@@ -13,6 +15,7 @@ export class ToolManager {
   private activeMode: ToolMode = "orbit";
   private raycaster: THREE.Raycaster;
   private mousePos = new THREE.Vector2();
+  private toolRegistry = new Map<ToolMode, ITool>();
 
   constructor(viewer: Viewer) {
     this.viewer = viewer;
@@ -23,7 +26,15 @@ export class ToolManager {
     this.inspectorTool = new InspectorTool(viewer);
     this.profileTool = new ProfileTool(viewer);
 
+    this.toolRegistry.set("measure", this.measurementTool);
+    this.toolRegistry.set("profile", this.profileTool);
+    this.toolRegistry.set("inspect", this.inspectorTool);
+
     this.setupListeners();
+
+    AppEvents.on("action:set-tool-mode", (mode: ToolMode) => {
+      this.setMode(mode);
+    });
   }
 
   public setMode(mode: ToolMode): void {
@@ -33,34 +44,22 @@ export class ToolManager {
     // Toggle FirstPersonControls
     this.viewer.firstPersonControls.setEnabled(mode === "fly");
 
-    if (mode === "measure") {
-      dom.style.cursor = "crosshair";
-      this.viewer.controls.enabled = false;
-      this.inspectorTool.clear();
-      this.profileTool.clear();
-      this.measurementTool.resetToIdle();
-    } else if (mode === "profile") {
-      dom.style.cursor = "crosshair";
-      this.viewer.controls.enabled = false;
-      this.inspectorTool.clear();
-      this.measurementTool.clear();
-      this.profileTool.resetToIdle();
-    } else if (mode === "inspect") {
-      dom.style.cursor = "crosshair";
-      this.viewer.controls.enabled = true;
-      this.measurementTool.clear();
-      this.profileTool.clear();
+    // Clear all tools
+    for (const tool of this.toolRegistry.values()) {
+      tool.clear();
+    }
+
+    const currentTool = this.toolRegistry.get(mode);
+    if (currentTool) {
+      currentTool.activate();
+      dom.style.cursor = currentTool.cursor;
+      this.viewer.controls.enabled = currentTool.allowsOrbit;
     } else if (mode === "fly") {
       dom.style.cursor = "grab";
-      this.inspectorTool.clear();
-      this.measurementTool.clear();
-      this.profileTool.clear();
+      this.viewer.controls.enabled = false;
     } else {
       dom.style.cursor = "default";
       this.viewer.controls.enabled = true;
-      this.inspectorTool.clear();
-      this.measurementTool.clear();
-      this.profileTool.clear();
     }
   }
 
@@ -73,17 +72,18 @@ export class ToolManager {
 
     dom.addEventListener("pointermove", (e: PointerEvent) => {
       const rect = dom.getBoundingClientRect();
-      this.mousePos.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      this.mousePos.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      const width = rect.width || window.innerWidth || 1;
+      const height = rect.height || window.innerHeight || 1;
+      this.mousePos.x = ((e.clientX - rect.left) / width) * 2 - 1;
+      this.mousePos.y = -((e.clientY - rect.top) / height) * 2 + 1;
 
       const intersected = this.getIntersectedPoint();
 
       if (this.activeMode === "inspect") {
         this.inspectorTool.handlePointerMove(intersected, e.clientX, e.clientY);
-      } else if (this.activeMode === "measure") {
-        this.measurementTool.handlePointerMove(intersected);
-      } else if (this.activeMode === "profile") {
-        this.profileTool.handlePointerMove(intersected);
+      } else {
+        const activeTool = this.toolRegistry.get(this.activeMode);
+        activeTool?.handlePointerMove?.(intersected, e.clientX, e.clientY);
       }
     });
 
@@ -96,11 +96,8 @@ export class ToolManager {
     dom.addEventListener("pointerdown", (e: PointerEvent) => {
       if (e.button === 0) {
         const intersected = this.getIntersectedPoint();
-        if (this.activeMode === "measure") {
-          this.measurementTool.handleClick(intersected);
-        } else if (this.activeMode === "profile") {
-          this.profileTool.handleClick(intersected);
-        }
+        const activeTool = this.toolRegistry.get(this.activeMode);
+        activeTool?.handleClick?.(intersected);
       }
     });
   }

@@ -5,12 +5,14 @@ import { UIManager } from "./ui/UIManager";
 import { FileService } from "./services/FileService";
 import { SampleDatasets } from "./services/SampleDatasets";
 import { ParseResult, ColorMode } from "./types";
+import { ParserWorkerClient } from "./services/ParserWorkerClient";
+import { AppEvents } from "./core/AppEvents";
 
 class App {
   private viewer: Viewer;
   private toolManager: ToolManager;
   private uiManager: UIManager;
-  private parserWorker: Worker;
+  private workerClient: ParserWorkerClient;
   private currentFileName: string = "points.txt";
   private maxImportPoints: number = 5_000_000;
   private importedDatasets: Map<string, { id: string; name: string; displayName: string; data?: string | ArrayBuffer | File; url?: string }> = new Map();
@@ -21,39 +23,36 @@ class App {
     this.uiManager = new UIManager(this.viewer, this.toolManager);
     this.maxImportPoints = this.uiManager.getImportBudget();
 
-    this.parserWorker = new Worker(new URL("./parser.worker.ts", import.meta.url));
-    this.parserWorker.onmessage = (e: MessageEvent<any>) => {
-      if (e.data.type === "progress") {
-        this.uiManager.setProgress(e.data.percent);
-        if (e.data.statusText) {
-          this.uiManager.updateStatus(this.currentFileName, e.data.statusText);
+    this.workerClient = new ParserWorkerClient(
+      (percent, statusText) => {
+        AppEvents.emit("ui:progress", percent);
+        if (statusText) {
+          AppEvents.emit("ui:status-update", this.currentFileName, statusText);
         }
-        return;
+      },
+      (err) => {
+        AppEvents.emit("ui:progress", null);
+        AppEvents.emit("ui:status-update", "Error", err);
+      },
+      (result) => {
+        this.handleParseSuccess(result);
       }
-      this.handleWorkerMessage(e.data);
-    };
+    );
 
-    this.parserWorker.onerror = (err: ErrorEvent) => {
-      this.uiManager.setProgress(null);
-      this.uiManager.updateStatus("Error", err.message || "Failed to process file in background worker");
-      console.error("Worker error:", err);
-    };
-
-    this.uiManager.onFileOpen((data, fileName) => {
+    AppEvents.on("action:open-file", (data: string | ArrayBuffer | File, fileName: string) => {
       this.registerAndLoadImportedFile(data, fileName);
     });
 
-    this.uiManager.onDatasetSelect((datasetId) => {
+    AppEvents.on("action:load-dataset", (datasetId: string) => {
       this.loadDatasetById(datasetId);
     });
 
-    this.uiManager.onImportBudgetChange((budget) => {
+    AppEvents.on("ui:import-budget-changed", (budget: number) => {
       this.maxImportPoints = budget;
     });
   }
 
   public async start(): Promise<void> {
-    // Check URL hash for deep-linking (e.g. #dataset=urban-city)
     const hash = window.location.hash.replace(/^#/, "");
     const params = new URLSearchParams(hash);
     const datasetParam = params.get("dataset");
@@ -74,7 +73,7 @@ class App {
 
     if (this.importedDatasets.has(datasetId)) {
       const entry = this.importedDatasets.get(datasetId)!;
-      this.uiManager.setDatasetValue(entry.id);
+      AppEvents.emit("ui:dataset-changed", entry.id);
       window.location.hash = `dataset=${encodeURIComponent(entry.id)}`;
       if (entry.data) {
         this.processFileData(entry.data, entry.name);
@@ -90,21 +89,19 @@ class App {
       return;
     }
 
-    this.uiManager.setDatasetValue(found.id);
+    AppEvents.emit("ui:dataset-changed", found.id);
     window.location.hash = `dataset=${found.id}`;
 
     if (found.type === "binary" && found.generateBinary) {
-      this.uiManager.updateStatus(found.name, "Generating binary LAS dataset...");
-      this.uiManager.setProgress(40);
+      AppEvents.emit("ui:status-update", found.name, "Generating binary LAS dataset...");
+      AppEvents.emit("ui:progress", 40);
       const buffer = found.generateBinary();
-      this.uiManager.setProgress(75);
+      AppEvents.emit("ui:progress", 75);
       this.processFileData(buffer, found.name);
-    } else if (found.type === "generator" && found.generate) {
-      this.uiManager.updateStatus(found.name, "Generating procedural point cloud...");
-      this.uiManager.setProgress(40);
-      const text = found.generate();
-      this.uiManager.setProgress(75);
-      this.processFileData(text, found.name);
+    } else if (found.type === "generator") {
+      this.currentFileName = found.name;
+      this.toolManager.measurementTool.clear();
+      this.workerClient.generateProcedural(found.id, this.maxImportPoints);
     } else if (found.url) {
       await this.loadFromUrl(found.url);
     }
@@ -123,7 +120,7 @@ class App {
       data: data
     });
 
-    this.uiManager.addImportedDataset(importId, displayName);
+    AppEvents.emit("ui:dataset-imported", importId, displayName);
     window.location.hash = `dataset=${encodeURIComponent(importId)}`;
     this.processFileData(data, fileName);
   }
@@ -131,11 +128,11 @@ class App {
   private async loadFromUrl(url: string, selectId?: string): Promise<void> {
     const cleanUrl = url.split("?")[0];
     const fileName = cleanUrl.split("/").pop() || "dataset.txt";
-    this.uiManager.updateStatus(fileName, "Downloading point cloud...");
-    this.uiManager.setProgress(30);
+    AppEvents.emit("ui:status-update", fileName, "Downloading point cloud...");
+    AppEvents.emit("ui:progress", 30);
 
     const res = await FileService.loadFile(url);
-    this.uiManager.setProgress(70);
+    AppEvents.emit("ui:progress", 70);
 
     if (res.success && res.data) {
       const isSampleUrl = SampleDatasets.list.some((s) => s.url === url);
@@ -150,43 +147,29 @@ class App {
           data: res.data,
           url: url
         });
-        this.uiManager.addImportedDataset(importId, displayName);
+        AppEvents.emit("ui:dataset-imported", importId, displayName);
         window.location.hash = `dataset=${encodeURIComponent(importId)}`;
       }
       this.processFileData(res.data, res.fileName || fileName);
     } else {
-      this.uiManager.setProgress(null);
-      this.uiManager.updateStatus(fileName, "Failed to load dataset");
+      AppEvents.emit("ui:progress", null);
+      AppEvents.emit("ui:status-update", fileName, "Failed to load dataset");
       console.error("Dataset download error:", res.error);
     }
   }
 
   private processFileData(data: string | ArrayBuffer | File, fileName: string): void {
     this.currentFileName = fileName;
-    this.uiManager.updateStatus(fileName, "Preparing point cloud...");
-    this.uiManager.setProgress(10);
+    AppEvents.emit("ui:status-update", fileName, "Preparing point cloud...");
+    AppEvents.emit("ui:progress", 10);
     this.toolManager.measurementTool.clear();
 
     if (data instanceof File || (typeof Blob !== "undefined" && data instanceof Blob)) {
-      this.parserWorker.postMessage({
-        type: "parse-file",
-        file: data,
-        maxPoints: this.maxImportPoints
-      });
+      this.workerClient.parseFile(data, this.maxImportPoints);
     } else if (data instanceof ArrayBuffer) {
-      // Transfer a slice of the ArrayBuffer so the original stored in importedDatasets remains intact
-      const bufferCopy = data.slice(0);
-      this.parserWorker.postMessage({
-        type: "parse-buffer",
-        buffer: bufferCopy,
-        maxPoints: this.maxImportPoints
-      }, [bufferCopy]);
+      this.workerClient.parseBuffer(data, this.maxImportPoints);
     } else {
-      this.parserWorker.postMessage({
-        type: "parse-text",
-        text: data,
-        maxPoints: this.maxImportPoints
-      });
+      this.workerClient.parseText(data, this.maxImportPoints);
     }
   }
 
@@ -208,16 +191,9 @@ class App {
     return hash;
   }
 
-  private handleWorkerMessage(msg: { success?: boolean; data?: ParseResult; error?: string }): void {
-    this.uiManager.setProgress(null);
+  private handleParseSuccess(data: ParseResult): void {
+    AppEvents.emit("ui:progress", null);
 
-    if (msg.error || !msg.data) {
-      this.uiManager.updateStatus("Error", msg.error || "Failed to parse points data");
-      console.error("Worker error:", msg.error);
-      return;
-    }
-
-    const data = msg.data;
     const pointSize = this.uiManager.getPointSize();
     const isOrtho = this.uiManager.isOrthoChecked();
     const pointCloud = new PointCloud(data, pointSize, isOrtho);
@@ -226,7 +202,9 @@ class App {
 
     // Auto-select colormap
     const defaultColorMode = data.hasRGB ? ColorMode.RGB : ColorMode.Turbo;
-    this.uiManager.setColormapValue(defaultColorMode);
+    // We didn't add a setColormapValue app event, so we can just emit an action or call renderSettingsPanel directly. Wait, main.ts can use AppEvents or UIManager still has this method? Wait, I removed setColormapValue from UIManager.
+    // Let's add AppEvents.emit("ui:colormap-changed", defaultColorMode);
+    AppEvents.emit("ui:colormap-changed", defaultColorMode);
 
     const boundsText = `Extents: ${data.size[0].toFixed(1)}m × ${data.size[2].toFixed(1)}m | Elev: ${data.size[1].toFixed(1)}m`;
     let countSummary = `${data.count.toLocaleString()} points`;
@@ -235,7 +213,8 @@ class App {
       countSummary = `${data.count.toLocaleString()} pts (${pct}% of ${(data.totalPoints).toLocaleString()} pts)`;
     }
 
-    this.uiManager.updateStatus(
+    AppEvents.emit(
+      "ui:status-update",
       this.currentFileName,
       countSummary,
       boundsText

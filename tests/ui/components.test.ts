@@ -9,6 +9,7 @@ import { StatusView } from "../../src/ui/components/StatusView";
 import { FileDropZone } from "../../src/ui/components/FileDropZone";
 import { QuickToolbar } from "../../src/ui/components/QuickToolbar";
 import { UIManager } from "../../src/ui/UIManager";
+import { AppEvents } from "../../src/core/AppEvents";
 
 describe("UI Components Modular Dual-View Unit Tests", () => {
   describe("DatasetSelector", () => {
@@ -42,16 +43,15 @@ describe("UI Components Modular Dual-View Unit Tests", () => {
       expect(selector.getValue()).toBe("imported-test_las");
     });
 
-    it("triggers onSelect callback when selection changes", () => {
+    it("triggers action:load-dataset when selection changes", () => {
       const selector = new DatasetSelector();
-      const cb = vi.fn();
-      selector.onSelect(cb);
+      const cb = vi.spyOn(AppEvents, "emit");
 
       const select = document.getElementById("select-dataset") as HTMLSelectElement;
       select.value = "mountain-lidar";
       select.dispatchEvent(new Event("change"));
 
-      expect(cb).toHaveBeenCalledWith("mountain-lidar");
+      expect(cb).toHaveBeenCalledWith("action:load-dataset", "mountain-lidar");
     });
   });
 
@@ -203,11 +203,13 @@ describe("UI Components Modular Dual-View Unit Tests", () => {
         </div>
 
         <!-- Minified quick toolbar buttons -->
-        <button id="quick-tool-orbit" class="quick-btn"></button>
-        <button id="quick-tool-measure" class="quick-btn"></button>
-        <button id="quick-tool-profile" class="quick-btn"></button>
-        <button id="quick-tool-inspect" class="quick-btn"></button>
-        <button id="quick-tool-fly" class="quick-btn"></button>
+        <div id="quick-toolbar">
+          <button id="quick-tool-orbit" class="quick-btn"></button>
+          <button id="quick-tool-measure" class="quick-btn"></button>
+          <button id="quick-tool-profile" class="quick-btn"></button>
+          <button id="quick-tool-inspect" class="quick-btn"></button>
+          <button id="quick-tool-fly" class="quick-btn"></button>
+        </div>
       `;
 
       mockViewer = {
@@ -222,9 +224,14 @@ describe("UI Components Modular Dual-View Unit Tests", () => {
       mockToolManager = {
         setMode: vi.fn()
       };
+      
+      // Since ToolBar and QuickToolbar emit events instead of calling setMode directly,
+      // we need to bridge the event to the mock.
+      AppEvents.on("action:set-tool-mode", (mode: any) => mockToolManager.setMode(mode));
     });
 
     it("syncs active class across both full and minified buttons when mode changes", () => {
+      new QuickToolbar();
       const toolbar = new ToolBar(mockViewer, mockToolManager);
       toolbar.setMode("measure");
 
@@ -236,6 +243,7 @@ describe("UI Components Modular Dual-View Unit Tests", () => {
     });
 
     it("switches mode when minified quick toolbar button is clicked", () => {
+      new QuickToolbar();
       const toolbar = new ToolBar(mockViewer, mockToolManager);
       const btnMiniProfile = document.getElementById("quick-tool-profile") as HTMLButtonElement;
       btnMiniProfile.click();
@@ -272,11 +280,13 @@ describe("UI Components Modular Dual-View Unit Tests", () => {
         <button id="btn-view-reset"></button>
 
         <!-- Minified quick toolbar controls -->
-        <button id="quick-toggle-edl" class="quick-btn active"></button>
-        <button id="quick-toggle-ortho" class="quick-btn"></button>
-        <button id="quick-cam-iso" class="quick-btn"></button>
-        <button id="quick-cam-top" class="quick-btn"></button>
-        <button id="quick-action-snapshot" class="quick-btn"></button>
+        <div id="quick-toolbar">
+          <button id="quick-toggle-edl" class="quick-btn active"></button>
+          <button id="quick-toggle-ortho" class="quick-btn"></button>
+          <button id="quick-cam-iso" class="quick-btn"></button>
+          <button id="quick-cam-top" class="quick-btn"></button>
+          <button id="quick-action-snapshot" class="quick-btn"></button>
+        </div>
       `;
 
       mockViewer = {
@@ -291,6 +301,7 @@ describe("UI Components Modular Dual-View Unit Tests", () => {
     });
 
     it("syncs EDL state between minified button and full checkbox", () => {
+      new QuickToolbar();
       const panel = new RenderSettingsPanel(mockViewer);
       const miniEdl = document.getElementById("quick-toggle-edl") as HTMLButtonElement;
       const fullEdl = document.getElementById("toggle-edl") as HTMLInputElement;
@@ -305,6 +316,7 @@ describe("UI Components Modular Dual-View Unit Tests", () => {
     });
 
     it("triggers snapshot and camera presets from minified buttons", () => {
+      new QuickToolbar();
       new RenderSettingsPanel(mockViewer);
 
       const miniIso = document.getElementById("quick-cam-iso") as HTMLButtonElement;

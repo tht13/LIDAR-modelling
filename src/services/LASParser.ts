@@ -1,4 +1,28 @@
 import { ParseResult } from "../types";
+import { GeoCoordinates } from "../utils/GeoCoordinates";
+
+export interface LASHeader {
+  versionMajor: number;
+  versionMinor: number;
+  offsetToPoints: number;
+  pointFormat: number;
+  pointRecordLength: number;
+  pointCount: number;
+  scaleX: number;
+  scaleY: number;
+  scaleZ: number;
+  offsetX: number;
+  offsetY: number;
+  offsetZ: number;
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+  minZ: number;
+  maxZ: number;
+  hasRGB: boolean;
+  rgbOffset: number;
+}
 
 export class LASParser {
   /**
@@ -11,13 +35,9 @@ export class LASParser {
   }
 
   /**
-   * Parse a binary LAS file (LAS 1.0 - 1.4, Point Formats 0, 1, 2, 3, 6, 7, 8)
-   * Supports stride decimation to guarantee safe memory usage on large files.
+   * Reads and validates the standard LAS 1.0 - 1.4 header from a DataView
    */
-  public static parse(buffer: ArrayBuffer, maxPoints: number = 5_000_000): ParseResult {
-    const view = new DataView(buffer);
-
-    // Verify signature
+  public static readHeader(view: DataView, totalByteLength: number): LASHeader {
     const sig = String.fromCharCode(view.getUint8(0), view.getUint8(1), view.getUint8(2), view.getUint8(3));
     if (sig !== "LASF") {
       throw new Error("Invalid LAS file signature: " + sig);
@@ -37,21 +57,21 @@ export class LASParser {
     const offsetY = view.getFloat64(163, true);
     const offsetZ = view.getFloat64(171, true);
 
-    let maxX = view.getFloat64(179, true);
-    let minX = view.getFloat64(187, true);
-    let maxY = view.getFloat64(195, true);
-    let minY = view.getFloat64(203, true);
-    let maxZ = view.getFloat64(211, true);
-    let minZ = view.getFloat64(219, true);
+    const maxX = view.getFloat64(179, true);
+    const minX = view.getFloat64(187, true);
+    const maxY = view.getFloat64(195, true);
+    const minY = view.getFloat64(203, true);
+    const maxZ = view.getFloat64(211, true);
+    const minZ = view.getFloat64(219, true);
 
     // LAS 1.4 64-bit point count support
-    if (versionMajor === 1 && versionMinor >= 4 && pointCount === 0 && buffer.byteLength >= 255) {
+    if (versionMajor === 1 && versionMinor >= 4 && pointCount === 0 && view.byteLength >= 255) {
       const bigCount = view.getBigUint64(247, true);
       pointCount = Number(bigCount);
     }
 
     // Safety check: calculate max points available from file length
-    const availablePoints = Math.max(0, Math.floor((buffer.byteLength - offsetToPoints) / pointRecordLength));
+    const availablePoints = Math.max(0, Math.floor((totalByteLength - offsetToPoints) / pointRecordLength));
     if (pointCount === 0 || pointCount > availablePoints) {
       pointCount = availablePoints;
     }
@@ -67,8 +87,74 @@ export class LASParser {
     else if (pointFormat === 3) rgbOffset = 28;
     else if (pointFormat === 7 || pointFormat === 8) rgbOffset = 30;
 
+    return {
+      versionMajor,
+      versionMinor,
+      offsetToPoints,
+      pointFormat,
+      pointRecordLength,
+      pointCount,
+      scaleX,
+      scaleY,
+      scaleZ,
+      offsetX,
+      offsetY,
+      offsetZ,
+      minX,
+      maxX,
+      minY,
+      maxY,
+      minZ,
+      maxZ,
+      hasRGB,
+      rgbOffset
+    };
+  }
+
+  /**
+   * Probes RGB bit depth (16-bit vs 8-bit) and returns color divisor (65535.0, 255.0, or 1.0)
+   */
+  public static probeColorDivisor(
+    view: DataView,
+    offsetToPoints: number,
+    pointRecordLength: number,
+    rgbOffset: number,
+    pointCount: number,
+    maxBytes: number
+  ): number {
+    if (rgbOffset <= 0) return 1.0;
+    const probePoints = Math.min(pointCount, 2000);
+    const step = Math.max(1, Math.floor(probePoints / 100));
+    let maxColorVal = 0;
+
+    for (let i = 0; i < probePoints; i += step) {
+      const off = offsetToPoints + i * pointRecordLength + rgbOffset;
+      if (off + 6 <= maxBytes) {
+        const r = view.getUint16(off, true);
+        const g = view.getUint16(off + 2, true);
+        const b = view.getUint16(off + 4, true);
+        if (r > maxColorVal) maxColorVal = r;
+        if (g > maxColorVal) maxColorVal = g;
+        if (b > maxColorVal) maxColorVal = b;
+      }
+    }
+
+    return maxColorVal > 255 ? 65535.0 : (maxColorVal > 1.0 ? 255.0 : 1.0);
+  }
+
+  /**
+   * Parse a binary LAS file (LAS 1.0 - 1.4, Point Formats 0, 1, 2, 3, 6, 7, 8)
+   * Supports stride decimation to guarantee safe memory usage on large files.
+   */
+  public static parse(buffer: ArrayBuffer, maxPoints: number = 5_000_000): ParseResult {
+    const view = new DataView(buffer);
+    const header = this.readHeader(view, buffer.byteLength);
+
+    let { minX, maxX, minY, maxY, minZ, maxZ } = header;
+    const { offsetToPoints, pointRecordLength, pointCount, scaleX, scaleY, scaleZ, offsetX, offsetY, offsetZ, hasRGB, rgbOffset } = header;
+
     // Check if header bounding box is valid. If uninitialized, quickly sample bounds.
-    let validBounds = (maxX > minX || maxY > minY || maxZ > minZ) && isFinite(minX) && isFinite(maxX);
+    const validBounds = (maxX > minX || maxY > minY || maxZ > minZ) && isFinite(minX) && isFinite(maxX);
     if (!validBounds) {
       minX = Infinity; maxX = -Infinity;
       minY = Infinity; maxY = -Infinity;
@@ -87,9 +173,7 @@ export class LASParser {
       if (!isFinite(minX)) { minX = 0; maxX = 1; minY = 0; maxY = 1; minZ = 0; maxZ = 1; }
     }
 
-    const centerX = (minX + maxX) / 2;
-    const centerY = (minY + maxY) / 2;
-    const centerZ = (minZ + maxZ) / 2;
+    const bounds = GeoCoordinates.computeBounds(minX, maxX, minY, maxY, minZ, maxZ);
     const zSpan = maxZ - minZ || 1.0;
 
     // Calculate stride for target point budget
@@ -100,23 +184,7 @@ export class LASParser {
     const colors = new Float32Array(targetCount * 3);
     const elevations = new Float32Array(targetCount);
 
-    // Fast check for RGB bit depth (16-bit vs 8-bit)
-    let maxColorVal = 0;
-    if (hasRGB && rgbOffset > 0) {
-      const probePoints = Math.min(pointCount, 2000);
-      for (let i = 0; i < probePoints; i += Math.max(1, Math.floor(probePoints / 100))) {
-        const off = offsetToPoints + i * pointRecordLength + rgbOffset;
-        if (off + 6 <= buffer.byteLength) {
-          const r = view.getUint16(off, true);
-          const g = view.getUint16(off + 2, true);
-          const b = view.getUint16(off + 4, true);
-          if (r > maxColorVal) maxColorVal = r;
-          if (g > maxColorVal) maxColorVal = g;
-          if (b > maxColorVal) maxColorVal = b;
-        }
-      }
-    }
-    const colorDivisor = maxColorVal > 255 ? 65535.0 : (maxColorVal > 1.0 ? 255.0 : 1.0);
+    const colorDivisor = hasRGB ? this.probeColorDivisor(view, offsetToPoints, pointRecordLength, rgbOffset, pointCount, buffer.byteLength) : 1.0;
 
     let outIndex = 0;
     for (let i = 0; i < pointCount && outIndex < targetCount; i += stride) {
@@ -127,20 +195,18 @@ export class LASParser {
       const py = view.getInt32(pOffset + 4, true) * scaleY + offsetY;
       const pz = view.getInt32(pOffset + 8, true) * scaleZ + offsetZ;
 
-      // Coordinate mapping: Three.js (X, Y=Elev, Z=Northing)
-      positions[outIndex * 3] = px - centerX;
-      positions[outIndex * 3 + 1] = pz - centerZ;
-      positions[outIndex * 3 + 2] = py - centerY;
+      // Coordinate mapping: Three.js (X = East, Y = Elev, Z = Northing)
+      const [lx, ly, lz] = GeoCoordinates.toLocal(px, py, pz, bounds.center);
+      positions[outIndex * 3] = lx;
+      positions[outIndex * 3 + 1] = ly;
+      positions[outIndex * 3 + 2] = lz;
 
-      elevations[outIndex] = (pz - minZ) / zSpan;
+      elevations[outIndex] = GeoCoordinates.normalizeElevation(pz, minZ, zSpan);
 
       if (hasRGB && rgbOffset > 0 && pOffset + rgbOffset + 6 <= buffer.byteLength) {
-        const r = view.getUint16(pOffset + rgbOffset, true);
-        const g = view.getUint16(pOffset + rgbOffset + 2, true);
-        const b = view.getUint16(pOffset + rgbOffset + 4, true);
-        colors[outIndex * 3] = r / colorDivisor;
-        colors[outIndex * 3 + 1] = g / colorDivisor;
-        colors[outIndex * 3 + 2] = b / colorDivisor;
+        colors[outIndex * 3] = view.getUint16(pOffset + rgbOffset, true) / colorDivisor;
+        colors[outIndex * 3 + 1] = view.getUint16(pOffset + rgbOffset + 2, true) / colorDivisor;
+        colors[outIndex * 3 + 2] = view.getUint16(pOffset + rgbOffset + 4, true) / colorDivisor;
       } else {
         colors[outIndex * 3] = 1.0;
         colors[outIndex * 3 + 1] = 1.0;
@@ -150,23 +216,147 @@ export class LASParser {
       outIndex++;
     }
 
-    const finalPositions = outIndex === targetCount ? positions : positions.subarray(0, outIndex * 3);
-    const finalColors = outIndex === targetCount ? colors : colors.subarray(0, outIndex * 3);
-    const finalElevations = outIndex === targetCount ? elevations : elevations.subarray(0, outIndex);
-
     return {
-      positions: finalPositions,
-      colors: finalColors,
-      elevations: finalElevations,
+      positions: outIndex === targetCount ? positions : positions.subarray(0, outIndex * 3),
+      colors: outIndex === targetCount ? colors : colors.subarray(0, outIndex * 3),
+      elevations: outIndex === targetCount ? elevations : elevations.subarray(0, outIndex),
       count: outIndex,
       totalPoints: pointCount,
       subsampled: stride > 1,
       stride,
-      min: [minX, minZ, minY],
-      max: [maxX, maxZ, maxY],
-      center: [centerX, centerZ, centerY],
-      size: [maxX - minX, maxZ - minZ, maxY - minY],
-      hasRGB: hasRGB && maxColorVal > 0
+      min: bounds.min,
+      max: bounds.max,
+      center: bounds.center,
+      size: bounds.size,
+      hasRGB: hasRGB && colorDivisor > 0
+    };
+  }
+
+  /**
+   * Stream binary LAS/LAZ file chunk-by-chunk using Blob.slice()
+   * Does NOT load the entire file into memory at once!
+   */
+  public static async streamParse(
+    file: Blob,
+    maxPoints: number = 5_000_000,
+    onProgress?: (percent: number, statusText: string) => void
+  ): Promise<ParseResult> {
+    const headerBuf = await file.slice(0, Math.min(file.size, 1024)).arrayBuffer();
+    const view = new DataView(headerBuf);
+    const header = this.readHeader(view, file.size);
+
+    let { minX, maxX, minY, maxY, minZ, maxZ } = header;
+    const { offsetToPoints, pointRecordLength, pointCount, scaleX, scaleY, scaleZ, offsetX, offsetY, offsetZ, hasRGB, rgbOffset } = header;
+
+    // Validate bounding box from header
+    const validBounds = (maxX > minX || maxY > minY || maxZ > minZ) && isFinite(minX) && isFinite(maxX);
+    if (!validBounds) {
+      minX = Infinity; maxX = -Infinity;
+      minY = Infinity; maxY = -Infinity;
+      minZ = Infinity; maxZ = -Infinity;
+      const probeCount = Math.min(pointCount, 2000);
+      const probeStep = Math.max(1, Math.floor(pointCount / probeCount));
+      for (let i = 0; i < pointCount && i < probeCount * probeStep; i += probeStep) {
+        const bStart = offsetToPoints + i * pointRecordLength;
+        const bBuf = await file.slice(bStart, bStart + 12).arrayBuffer();
+        if (bBuf.byteLength >= 12) {
+          const dv = new DataView(bBuf);
+          const px = dv.getInt32(0, true) * scaleX + offsetX;
+          const py = dv.getInt32(4, true) * scaleY + offsetY;
+          const pz = dv.getInt32(8, true) * scaleZ + offsetZ;
+          if (px < minX) minX = px; if (px > maxX) maxX = px;
+          if (py < minY) minY = py; if (py > maxY) maxY = py;
+          if (pz < minZ) minZ = pz; if (pz > maxZ) maxZ = pz;
+        }
+      }
+      if (!isFinite(minX)) { minX = 0; maxX = 1; minY = 0; maxY = 1; minZ = 0; maxZ = 1; }
+    }
+
+    const bounds = GeoCoordinates.computeBounds(minX, maxX, minY, maxY, minZ, maxZ);
+    const zSpan = maxZ - minZ || 1.0;
+
+    // Stride decimation to target budget
+    const stride = (maxPoints > 0 && pointCount > maxPoints) ? Math.ceil(pointCount / maxPoints) : 1;
+    const targetCount = Math.ceil(pointCount / stride);
+
+    const positions = new Float32Array(targetCount * 3);
+    const colors = new Float32Array(targetCount * 3);
+    const elevations = new Float32Array(targetCount);
+
+    // Probe color bit depth
+    let colorDivisor = 1.0;
+    if (hasRGB && rgbOffset > 0) {
+      const probeLen = Math.min(1000 * pointRecordLength, file.size - offsetToPoints);
+      const probeChunk = await file.slice(offsetToPoints, offsetToPoints + probeLen).arrayBuffer();
+      const probeView = new DataView(probeChunk);
+      const probeN = Math.floor(probeChunk.byteLength / pointRecordLength);
+      colorDivisor = this.probeColorDivisor(probeView, 0, pointRecordLength, rgbOffset, probeN, probeChunk.byteLength);
+    }
+
+    // Stream in 16MB slices (approx 500,000 point records per chunk)
+    const CHUNK_POINTS = 500_000;
+    let outIndex = 0;
+    let nextSamplePoint = 0;
+
+    for (let chunkStart = 0; chunkStart < pointCount && outIndex < targetCount; chunkStart += CHUNK_POINTS) {
+      const chunkEnd = Math.min(pointCount, chunkStart + CHUNK_POINTS);
+      const byteStart = offsetToPoints + chunkStart * pointRecordLength;
+      const byteEnd = offsetToPoints + chunkEnd * pointRecordLength;
+
+      const chunkBuffer = await file.slice(byteStart, byteEnd).arrayBuffer();
+      const chunkView = new DataView(chunkBuffer);
+
+      while (nextSamplePoint < chunkEnd && outIndex < targetCount) {
+        const localIndex = nextSamplePoint - chunkStart;
+        const pOffset = localIndex * pointRecordLength;
+
+        if (pOffset + 12 > chunkBuffer.byteLength) break;
+
+        const px = chunkView.getInt32(pOffset, true) * scaleX + offsetX;
+        const py = chunkView.getInt32(pOffset + 4, true) * scaleY + offsetY;
+        const pz = chunkView.getInt32(pOffset + 8, true) * scaleZ + offsetZ;
+
+        // Coordinate mapping: Three.js (X = East, Y = Elev, Z = Northing)
+        const [lx, ly, lz] = GeoCoordinates.toLocal(px, py, pz, bounds.center);
+        positions[outIndex * 3] = lx;
+        positions[outIndex * 3 + 1] = ly;
+        positions[outIndex * 3 + 2] = lz;
+
+        elevations[outIndex] = GeoCoordinates.normalizeElevation(pz, minZ, zSpan);
+
+        if (hasRGB && rgbOffset > 0 && pOffset + rgbOffset + 6 <= chunkBuffer.byteLength) {
+          colors[outIndex * 3] = chunkView.getUint16(pOffset + rgbOffset, true) / colorDivisor;
+          colors[outIndex * 3 + 1] = chunkView.getUint16(pOffset + rgbOffset + 2, true) / colorDivisor;
+          colors[outIndex * 3 + 2] = chunkView.getUint16(pOffset + rgbOffset + 4, true) / colorDivisor;
+        } else {
+          colors[outIndex * 3] = 1.0;
+          colors[outIndex * 3 + 1] = 1.0;
+          colors[outIndex * 3 + 2] = 1.0;
+        }
+
+        outIndex++;
+        nextSamplePoint += stride;
+      }
+
+      if (onProgress) {
+        const pct = Math.min(99, Math.round((chunkEnd / pointCount) * 100));
+        onProgress(pct, `Streaming: ${outIndex.toLocaleString()} / ${pointCount.toLocaleString()} points (${pct}%)...`);
+      }
+    }
+
+    return {
+      positions: outIndex === targetCount ? positions : positions.subarray(0, outIndex * 3),
+      colors: outIndex === targetCount ? colors : colors.subarray(0, outIndex * 3),
+      elevations: outIndex === targetCount ? elevations : elevations.subarray(0, outIndex),
+      count: outIndex,
+      totalPoints: pointCount,
+      subsampled: stride > 1,
+      stride,
+      min: bounds.min,
+      max: bounds.max,
+      center: bounds.center,
+      size: bounds.size,
+      hasRGB: hasRGB && colorDivisor > 0
     };
   }
 

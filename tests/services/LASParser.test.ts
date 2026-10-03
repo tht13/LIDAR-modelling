@@ -94,4 +94,39 @@ describe("LASParser", () => {
       expect(() => LASParser.parse(headerOnly)).toThrowError(/contains 0 point records/);
     });
   });
+
+  describe("streamParse", () => {
+    it("streams a LAS blob chunk-by-chunk and reports progress", async () => {
+      const numPoints = 150;
+      const buffer = LASParser.createSampleLAS(numPoints);
+      const blob = new Blob([buffer], { type: "application/octet-stream" });
+
+      const progressLog: number[] = [];
+      const result = await LASParser.streamParse(blob, 1000, (pct) => {
+        progressLog.push(pct);
+      });
+
+      expect(result.count).toBe(numPoints);
+      expect(result.totalPoints).toBe(numPoints);
+      expect(result.positions.length).toBe(numPoints * 3);
+      expect(result.hasRGB).toBe(true);
+      expect(progressLog.length).toBeGreaterThan(0);
+    });
+
+    it("applies budget stride decimation when streaming large LAS blobs", async () => {
+      const numPoints = 300;
+      const buffer = LASParser.createSampleLAS(numPoints);
+      const blob = new Blob([buffer], { type: "application/octet-stream" });
+
+      const result = await LASParser.streamParse(blob, 50);
+      expect(result.subsampled).toBe(true);
+      expect(result.stride).toBeGreaterThan(1);
+      expect(result.count).toBeLessThanOrEqual(numPoints);
+    });
+
+    it("throws an error when streaming a blob with invalid signature", async () => {
+      const invalidBlob = new Blob([new ArrayBuffer(500)], { type: "application/octet-stream" });
+      await expect(LASParser.streamParse(invalidBlob)).rejects.toThrowError(/Invalid LAS file signature/);
+    });
+  });
 });

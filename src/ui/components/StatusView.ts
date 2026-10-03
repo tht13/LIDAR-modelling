@@ -1,4 +1,5 @@
 import { createElement } from "../utils/dom";
+import { AppEvents } from "../../core/AppEvents";
 
 export class StatusView {
   public readonly element: HTMLElement;
@@ -34,6 +35,18 @@ export class StatusView {
 
     this.infoFile = document.getElementById("quick-info-file");
     this.infoPts = document.getElementById("quick-info-pts");
+
+    AppEvents.on("ui:status-update", (fileName: string, statusText: string, boundsText: string = "") => {
+      this.updateStatus(fileName, statusText, boundsText);
+    });
+
+    AppEvents.on("ui:progress", (percent: number | null) => {
+      this.setProgress(percent);
+    });
+
+    AppEvents.on("action:request-filename", (callback: (fileName: string) => void) => {
+      callback(this.getFileName());
+    });
   }
 
   public updateStatus(fileName: string, statusText: string, boundsText: string = ""): void {

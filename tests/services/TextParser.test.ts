@@ -150,9 +150,36 @@ describe("TextParser", () => {
       expect(result.center[0]).toBeCloseTo(40);
     });
 
+    it("parses multi-chunk streams and preserves leftover lines across chunk boundaries", async () => {
+      const line1 = "10.0 20.0 30.0\n";
+      const line2 = "40.0 50.0 60.0\n";
+      const line3 = "70.0 80.0 90.0\n";
+      const blob = new Blob([line1 + line2 + line3], { type: "text/plain" });
+
+      // Force tiny chunks (15 bytes) to test chunk boundary splitting
+      const result = await TextParser.streamParse(blob, 1000, undefined, 15);
+      expect(result.count).toBe(3);
+      expect(result.center[0]).toBeCloseTo(40);
+    });
+
     it("throws an error when blob contains no valid points", async () => {
       const blob = new Blob(["// Empty comment only\n"], { type: "text/plain" });
       await expect(TextParser.streamParse(blob)).rejects.toThrowError(/No points/);
+    });
+  });
+
+  describe("parseLine", () => {
+    it("returns null for comments or empty lines", () => {
+      expect(TextParser.parseLine("")).toBeNull();
+      expect(TextParser.parseLine("// comment")).toBeNull();
+      expect(TextParser.parseLine("# comment")).toBeNull();
+      expect(TextParser.parseLine("ply")).toBeNull();
+      expect(TextParser.parseLine("end_header")).toBeNull();
+    });
+
+    it("parses 3-value xyz and 6-value xyzrgb", () => {
+      expect(TextParser.parseLine("1 2 3")).toEqual({ x: 1, y: 2, z: 3 });
+      expect(TextParser.parseLine("1,2,3,255,128,0")).toEqual({ x: 1, y: 2, z: 3, r: 255, g: 128, b: 0 });
     });
   });
 });
