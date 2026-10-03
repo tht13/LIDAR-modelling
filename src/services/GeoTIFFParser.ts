@@ -30,15 +30,22 @@ export class GeoTIFFParser {
   ): Promise<ParseResult> {
     if (onProgress) onProgress(15, "Opening GeoTIFF structure...");
 
-    const tiff: GeoTIFF = source instanceof Blob
-      ? await fromBlob(source)
-      : await fromArrayBuffer(source);
+    let buffer: ArrayBuffer;
+    if (source instanceof Blob) {
+      if (onProgress) onProgress(20, "Loading TIFF into memory...");
+      buffer = await source.arrayBuffer();
+    } else {
+      buffer = source;
+    }
+
+    if (onProgress) onProgress(28, "Parsing TIFF headers...");
+    const tiff: GeoTIFF = await fromArrayBuffer(buffer);
 
     const image: GeoTIFFImage = await tiff.getImage();
     const width = image.getWidth();
     const height = image.getHeight();
 
-    if (onProgress) onProgress(30, `Reading raster (${width} × ${height} pixels)...`);
+    if (onProgress) onProgress(35, `Decoding elevation raster (${width.toLocaleString()} × ${height.toLocaleString()})...`);
 
     // Determine geographic / projected bounding box
     let bbox = [0, 0, width, height];

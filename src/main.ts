@@ -32,6 +32,12 @@ class App {
       this.handleWorkerMessage(e.data);
     };
 
+    this.parserWorker.onerror = (err: ErrorEvent) => {
+      this.uiManager.setProgress(null);
+      this.uiManager.updateStatus("Error", err.message || "Failed to process file in background worker");
+      console.error("Worker error:", err);
+    };
+
     this.uiManager.onFileOpen((data, fileName) => {
       this.processFileData(data, fileName);
     });

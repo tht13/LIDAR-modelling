@@ -70,6 +70,9 @@ export class Viewer {
     this.scene.add(pc.mesh);
     this.gridHelper.position.y = -pc.data.size[1] / 2 - 2;
 
+    const maxDim = Math.max(pc.data.size[0], pc.data.size[2]);
+    this.gridHelper.scale.setScalar(Math.max(1, maxDim / 2000));
+
     this.setCameraPreset("iso");
   }
 
@@ -96,22 +99,26 @@ export class Viewer {
     const aspect = window.innerWidth / window.innerHeight;
     const currentPos = this.activeCamera.position.clone();
     const currentTarget = this.controls.target.clone();
+    const sphere = this.pointCloud?.getBoundingSphere();
+    const radius = sphere ? Math.max(10, sphere.radius) : 500;
 
     if (useOrtho) {
       const dist = currentPos.distanceTo(currentTarget);
-      const orthoH = dist * 0.6;
+      const orthoH = Math.max(dist * 0.6, radius * 0.8);
       this.orthoCamera.left = -orthoH * aspect;
       this.orthoCamera.right = orthoH * aspect;
       this.orthoCamera.top = orthoH;
       this.orthoCamera.bottom = -orthoH;
-      this.orthoCamera.near = -50000;
-      this.orthoCamera.far = 50000;
+      this.orthoCamera.near = -Math.max(50000, radius * 10);
+      this.orthoCamera.far = Math.max(50000, radius * 10);
       this.orthoCamera.position.copy(currentPos);
       this.orthoCamera.lookAt(currentTarget);
       this.orthoCamera.updateProjectionMatrix();
 
       this.activeCamera = this.orthoCamera;
     } else {
+      this.perspCamera.near = Math.max(0.1, radius / 5000);
+      this.perspCamera.far = Math.max(50000, radius * 30);
       this.perspCamera.position.copy(currentPos);
       this.perspCamera.lookAt(currentTarget);
       this.perspCamera.updateProjectionMatrix();
@@ -134,8 +141,17 @@ export class Viewer {
     const sphere = this.pointCloud.getBoundingSphere();
     if (!sphere) return;
 
-    const radius = sphere.radius;
+    const radius = Math.max(10, sphere.radius);
     this.controls.target.set(0, 0, 0);
+
+    // Dynamically adjust camera clipping planes and distances for datasets of any size (from 10m to 1,000,000m)
+    this.perspCamera.near = Math.max(0.1, radius / 5000);
+    this.perspCamera.far = Math.max(100000, radius * 30);
+    this.perspCamera.updateProjectionMatrix();
+
+    this.orthoCamera.near = -Math.max(50000, radius * 10);
+    this.orthoCamera.far = Math.max(50000, radius * 10);
+    this.orthoCamera.updateProjectionMatrix();
 
     if (preset === "top") {
       this.activeCamera.position.set(0, radius * 2.0, 0);
@@ -148,6 +164,7 @@ export class Viewer {
     }
 
     this.activeCamera.lookAt(0, 0, 0);
+    this.controls.maxDistance = radius * 35;
     this.controls.update();
 
     if (this.activeCamera instanceof THREE.OrthographicCamera) {
