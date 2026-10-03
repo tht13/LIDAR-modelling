@@ -377,6 +377,7 @@ export class UIManager {
 
     // Inspector Tool Output
     this.toolManager.inspectorTool.onInspect((point: InspectedPoint | null) => {
+      if (!this.inspectorTooltip) return;
       if (point) {
         this.inspectorTooltip.style.display = "block";
         this.inspectorTooltip.style.left = `${point.screenX + 14}px`;
