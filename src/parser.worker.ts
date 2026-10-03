@@ -1,12 +1,35 @@
 import { ParseResult } from "./types";
+import { LASParser } from "./services/LASParser";
 
 const ctx: DedicatedWorkerGlobalScope = self as any;
 
-ctx.onmessage = (event: MessageEvent<string>) => {
-  const rawText = event.data;
-  const result = parsePointCloudFast(rawText);
+ctx.onmessage = (event: MessageEvent<string | ArrayBuffer | { buffer?: ArrayBuffer; text?: string }>) => {
+  const payload = event.data;
+  let result: ParseResult | null = null;
 
-  if (!result) {
+  try {
+    if (payload instanceof ArrayBuffer) {
+      if (LASParser.isLAS(payload)) {
+        result = LASParser.parse(payload);
+      } else {
+        const text = new TextDecoder().decode(payload);
+        result = parsePointCloudFast(text);
+      }
+    } else if (typeof payload === "string") {
+      result = parsePointCloudFast(payload);
+    } else if (payload && typeof payload === "object") {
+      if (payload.buffer && LASParser.isLAS(payload.buffer)) {
+        result = LASParser.parse(payload.buffer);
+      } else if (payload.text) {
+        result = parsePointCloudFast(payload.text);
+      }
+    }
+  } catch (err: any) {
+    ctx.postMessage({ error: err?.message || "Failed to parse point cloud" });
+    return;
+  }
+
+  if (!result || result.count === 0) {
     ctx.postMessage({ error: "No valid point coordinates found in file" });
     return;
   }

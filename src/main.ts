@@ -22,8 +22,8 @@ class App {
       this.handleWorkerMessage(e.data);
     };
 
-    this.uiManager.onFileOpen((text, fileName) => {
-      this.processFileText(text, fileName);
+    this.uiManager.onFileOpen((data, fileName) => {
+      this.processFileData(data, fileName);
     });
 
     this.uiManager.onDatasetSelect((datasetId) => {
@@ -60,12 +60,18 @@ class App {
     this.uiManager.setDatasetValue(found.id);
     window.location.hash = `dataset=${found.id}`;
 
-    if (found.type === "generator" && found.generate) {
+    if (found.type === "binary" && found.generateBinary) {
+      this.uiManager.updateStatus(found.name, "Generating binary LAS dataset...");
+      this.uiManager.setProgress(40);
+      const buffer = found.generateBinary();
+      this.uiManager.setProgress(75);
+      this.processFileData(buffer, found.name);
+    } else if (found.type === "generator" && found.generate) {
       this.uiManager.updateStatus(found.name, "Generating procedural point cloud...");
       this.uiManager.setProgress(40);
       const text = found.generate();
       this.uiManager.setProgress(75);
-      this.processFileText(text, found.name);
+      this.processFileData(text, found.name);
     } else if (found.url) {
       await this.loadFromUrl(found.url);
     }
@@ -80,7 +86,7 @@ class App {
     this.uiManager.setProgress(70);
 
     if (res.success && res.data) {
-      this.processFileText(res.data, res.fileName || fileName);
+      this.processFileData(res.data, res.fileName || fileName);
     } else {
       this.uiManager.setProgress(null);
       this.uiManager.updateStatus(fileName, "Failed to load dataset");
@@ -88,11 +94,16 @@ class App {
     }
   }
 
-  private processFileText(text: string, fileName: string): void {
+  private processFileData(data: string | ArrayBuffer, fileName: string): void {
     this.uiManager.updateStatus(fileName, "Parsing points in background...");
     this.uiManager.setProgress(85);
     this.toolManager.measurementTool.clear();
-    this.parserWorker.postMessage(text);
+
+    if (data instanceof ArrayBuffer) {
+      this.parserWorker.postMessage(data, [data]);
+    } else {
+      this.parserWorker.postMessage(data);
+    }
   }
 
   private handleWorkerMessage(msg: { success?: boolean; data?: ParseResult; error?: string }): void {

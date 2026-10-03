@@ -1,9 +1,12 @@
+import { LASParser } from "./LASParser";
+
 export interface SampleDataset {
   id: string;
   name: string;
-  type: "file" | "generator";
+  type: "file" | "generator" | "binary";
   url?: string;
   generate?: () => string;
+  generateBinary?: () => ArrayBuffer;
 }
 
 export class SampleDatasets {
@@ -13,6 +16,12 @@ export class SampleDatasets {
       name: "⛰️ Mountain Valley (LIDAR Scan)",
       type: "file",
       url: "points.txt"
+    },
+    {
+      id: "las-survey",
+      name: "🛰️ Aerial LiDAR Topography (.LAS Binary)",
+      type: "binary",
+      generateBinary: () => LASParser.createSampleLAS(30000)
     },
     {
       id: "urban-city",

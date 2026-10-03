@@ -11,7 +11,8 @@ async function handleOpenFile() {
   const result = await dialog.showOpenDialog(mainWindow, {
     title: 'Select Point Cloud File',
     filters: [
-      { name: 'Point Cloud Files', extensions: ['txt', 'xyz', 'pts', 'csv', 'asc'] },
+      { name: 'Point Cloud Files', extensions: ['las', 'laz', 'ply', 'txt', 'xyz', 'pts', 'csv', 'asc'] },
+      { name: 'LAS / LAZ Files', extensions: ['las', 'laz'] },
       { name: 'All Files', extensions: ['*'] }
     ],
     properties: ['openFile']
@@ -23,13 +24,15 @@ async function handleOpenFile() {
 
   const filePath = result.filePaths[0];
   try {
-    const content = await fs.readFile(filePath, 'utf8');
+    const ext = path.extname(filePath).toLowerCase();
+    const isBinary = ext === '.las' || ext === '.laz';
+    const content = isBinary ? await fs.readFile(filePath) : await fs.readFile(filePath, 'utf8');
     return {
       canceled: false,
       success: true,
       fileName: path.basename(filePath),
       filePath: filePath,
-      data: content
+      data: isBinary ? content.buffer.slice(content.byteOffset, content.byteOffset + content.byteLength) : content
     };
   } catch (err) {
     console.error('Failed to read selected file:', err);

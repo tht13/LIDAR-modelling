@@ -9,7 +9,7 @@ export class FileService {
   /**
    * Loads a default or named point cloud file
    */
-  public static async loadFile(pathOrUrl: string): Promise<{ success: boolean; fileName: string; data?: string; error?: string }> {
+  public static async loadFile(pathOrUrl: string): Promise<{ success: boolean; fileName: string; data?: string | ArrayBuffer; error?: string }> {
     if (this.isElectron()) {
       try {
         const res = await window.electronAPI.getPoints(pathOrUrl);
@@ -29,7 +29,8 @@ export class FileService {
         if (!response.ok) {
           throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
         }
-        const data = await response.text();
+        const isBinary = pathOrUrl.toLowerCase().endsWith(".las") || pathOrUrl.toLowerCase().endsWith(".laz");
+        const data = isBinary ? await response.arrayBuffer() : await response.text();
         return { success: true, fileName: pathOrUrl, data };
       } catch (err: any) {
         return { success: false, fileName: pathOrUrl, error: err?.message || String(err) };
@@ -41,7 +42,7 @@ export class FileService {
    * Prompts the user to select a point cloud file:
    * Uses Native OS Dialog in Electron, or HTML5 <input type="file"> in Web Browser.
    */
-  public static async openFilePicker(): Promise<{ success: boolean; canceled?: boolean; fileName?: string; data?: string; error?: string }> {
+  public static async openFilePicker(): Promise<{ success: boolean; canceled?: boolean; fileName?: string; data?: string | ArrayBuffer; error?: string }> {
     if (this.isElectron()) {
       try {
         const res = await window.electronAPI.openFileDialog();
@@ -60,19 +61,21 @@ export class FileService {
       return new Promise((resolve) => {
         const fileInput = document.createElement("input");
         fileInput.type = "file";
-        fileInput.accept = ".txt,.xyz,.pts,.csv,.asc";
+        fileInput.accept = ".txt,.xyz,.pts,.csv,.asc,.las,.laz,.ply";
         fileInput.style.display = "none";
 
         fileInput.onchange = async () => {
           if (fileInput.files && fileInput.files.length > 0) {
             const file = fileInput.files[0];
             try {
-              const text = await file.text();
+              const ext = file.name.toLowerCase();
+              const isBinary = ext.endsWith(".las") || ext.endsWith(".laz");
+              const data = isBinary ? await file.arrayBuffer() : await file.text();
               resolve({
                 success: true,
                 canceled: false,
                 fileName: file.name,
-                data: text
+                data
               });
             } catch (err: any) {
               resolve({ success: false, error: err?.message || "Failed to read file" });

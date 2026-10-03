@@ -7,7 +7,7 @@ import { ProfileData } from "../tools/ProfileTool";
 export class UIManager {
   private viewer: Viewer;
   private toolManager: ToolManager;
-  private onFileOpenCallback: ((text: string, fileName: string) => void) | null = null;
+  private onFileOpenCallback: ((data: string | ArrayBuffer, fileName: string) => void) | null = null;
   private onDatasetSelectCallback: ((datasetId: string) => void) | null = null;
 
   // DOM Elements
@@ -66,7 +66,7 @@ export class UIManager {
     this.bindToolCallbacks();
   }
 
-  public onFileOpen(cb: (text: string, fileName: string) => void): void {
+  public onFileOpen(cb: (data: string | ArrayBuffer, fileName: string) => void): void {
     this.onFileOpenCallback = cb;
   }
 
@@ -266,8 +266,10 @@ export class UIManager {
       this.dropOverlay.style.display = "none";
       if (e.dataTransfer && e.dataTransfer.files.length > 0 && this.onFileOpenCallback) {
         const file = e.dataTransfer.files[0];
-        const text = await file.text();
-        this.onFileOpenCallback(text, file.name);
+        const ext = file.name.toLowerCase();
+        const isBinary = ext.endsWith(".las") || ext.endsWith(".laz");
+        const data = isBinary ? await file.arrayBuffer() : await file.text();
+        this.onFileOpenCallback(data, file.name);
       }
     });
   }
