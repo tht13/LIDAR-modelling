@@ -87,8 +87,10 @@ export class UIManager {
     this.bindToolCallbacks();
 
     // Auto-minimize on mobile viewports so 3D scene and menu button are visible
-    if (typeof window !== "undefined" && typeof window.innerWidth === "number" && window.innerWidth <= 600) {
-      this.minimizeMenu();
+    if (typeof window !== "undefined" && typeof window.innerWidth === "number") {
+      if (window.innerWidth <= 768 || window.innerHeight <= 500) {
+        this.minimizeMenu();
+      }
     }
   }
 

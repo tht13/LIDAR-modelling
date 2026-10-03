@@ -47,6 +47,8 @@ jobs:
           cp index.html _site/
           cp points.txt _site/
           cp -r dist _site/dist
+          mkdir -p _site/src
+          cp -r src/styles _site/src/styles
 
       - name: Upload GitHub Pages Artifact
         uses: actions/upload-pages-artifact@v3

@@ -98,7 +98,7 @@
 }
 
 /* Mobile & Small Screen Responsiveness */
-@media (max-width: 600px) {
+@media (max-width: 768px), (max-height: 500px) {
   #quick-toolbar {
     top: 10px;
     left: 10px;

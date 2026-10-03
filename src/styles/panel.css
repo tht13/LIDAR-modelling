@@ -261,7 +261,7 @@ input:checked + .slider-toggle:before {
   transition: width 0.15s ease;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 768px), (max-height: 500px) {
   #ui-panel {
     top: 10px;
     left: 10px;
