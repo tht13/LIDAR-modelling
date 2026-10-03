@@ -1,0 +1,7 @@
+node_modules/
+dist/
+out/
+*.asar
+.vscode/
+.DS_Store
+Thumbs.db

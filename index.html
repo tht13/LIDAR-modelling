@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LIDAR Point Cloud Viewer</title>
+    <style>
+      * { box-sizing: border-box; user-select: none; }
+      html, body {
+        padding: 0;
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background-color: #121212;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        color: #f0f0f0;
+      }
+      #ui-panel {
+        position: absolute;
+        top: 16px;
+        left: 16px;
+        z-index: 10;
+        background: rgba(22, 24, 29, 0.88);
+        backdrop-filter: blur(12px);
+        padding: 16px 18px;
+        border-radius: 12px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        width: 290px;
+        max-height: calc(100vh - 32px);
+        overflow-y: auto;
+      }
+      #ui-panel::-webkit-scrollbar { width: 4px; }
+      #ui-panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
+      
+      .title-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .title {
+        font-weight: 700;
+        font-size: 15px;
+        letter-spacing: 0.5px;
+        color: #ffffff;
+      }
+      .btn-row {
+        display: flex;
+        gap: 6px;
+      }
+      .btn {
+        background: #2563eb;
+        color: white;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 12px;
+        font-weight: 500;
+        transition: all 0.15s ease;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+      }
+      .btn:hover { background: #1d4ed8; }
+      .btn:active { background: #1e40af; }
+      .btn-secondary {
+        background: rgba(255, 255, 255, 0.1);
+        color: #e2e8f0;
+      }
+      .btn-secondary:hover { background: rgba(255, 255, 255, 0.18); }
+      .btn-secondary.active {
+        background: #2563eb;
+        color: white;
+      }
+
+      .section-title {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.8px;
+        color: #64748b;
+        font-weight: 700;
+        margin-top: 4px;
+      }
+
+      .control-group {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-size: 12px;
+        color: #9ca3af;
+      }
+      .control-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 12px;
+        color: #d1d5db;
+      }
+      select {
+        width: 100%;
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        color: #ffffff;
+        padding: 6px 8px;
+        border-radius: 6px;
+        font-size: 12px;
+        outline: none;
+        cursor: pointer;
+      }
+      select option {
+        background: #1e222b;
+        color: #ffffff;
+      }
+      input[type=range] {
+        width: 100%;
+        accent-color: #3b82f6;
+        cursor: pointer;
+        height: 4px;
+        margin: 4px 0;
+      }
+      .button-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 4px;
+      }
+      .button-grid .btn {
+        padding: 5px 0;
+        font-size: 11px;
+      }
+      .tool-tabs {
+        display: flex;
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 8px;
+        padding: 2px;
+        gap: 2px;
+      }
+      .tool-btn {
+        flex: 1;
+        padding: 6px 4px;
+        font-size: 11px;
+        text-align: center;
+        border-radius: 6px;
+        cursor: pointer;
+        color: #94a3b8;
+        transition: all 0.15s;
+        border: none;
+        background: transparent;
+      }
+      .tool-btn.active {
+        background: #2563eb;
+        color: white;
+        font-weight: 600;
+      }
+
+      .switch {
+        position: relative;
+        display: inline-block;
+        width: 32px;
+        height: 18px;
+      }
+      .switch input { opacity: 0; width: 0; height: 0; }
+      .slider-toggle {
+        position: absolute;
+        cursor: pointer;
+        inset: 0;
+        background-color: #374151;
+        transition: .2s;
+        border-radius: 18px;
+      }
+      .slider-toggle:before {
+        position: absolute;
+        content: "";
+        height: 12px;
+        width: 12px;
+        left: 3px;
+        bottom: 3px;
+        background-color: white;
+        transition: .2s;
+        border-radius: 50%;
+      }
+      input:checked + .slider-toggle { background-color: #2563eb; }
+      input:checked + .slider-toggle:before { transform: translateX(14px); }
+
+      #status-info {
+        font-size: 11px;
+        color: #94a3b8;
+        line-height: 1.5;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        padding-top: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      /* Floating Measure / Inspector Tooltip */
+      #measure-box {
+        position: absolute;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(18, 20, 26, 0.9);
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(59, 130, 246, 0.5);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        border-radius: 8px;
+        padding: 10px 16px;
+        display: none;
+        align-items: center;
+        gap: 16px;
+        z-index: 20;
+        font-size: 13px;
+      }
+      .measure-val {
+        color: #60a5fa;
+        font-weight: 600;
+      }
+      #inspector-tooltip {
+        position: absolute;
+        display: none;
+        background: rgba(15, 17, 23, 0.95);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        padding: 6px 10px;
+        border-radius: 6px;
+        font-size: 11px;
+        color: #e2e8f0;
+        pointer-events: none;
+        z-index: 30;
+        line-height: 1.4;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+        font-family: monospace;
+      }
+
+      #drop-overlay {
+        position: absolute;
+        inset: 0;
+        background: rgba(37, 99, 235, 0.2);
+        border: 3px dashed #3b82f6;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        font-size: 22px;
+        font-weight: 700;
+        color: #ffffff;
+        z-index: 100;
+        pointer-events: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="ui-panel">
+      <div class="title-row">
+        <span class="title">LIDAR Viewer</span>
+        <div class="btn-row">
+          <button id="btn-snapshot" class="btn btn-secondary" title="Save Snapshot PNG">📸</button>
+          <button id="btn-open" class="btn">Open File</button>
+        </div>
+      </div>
+
+      <!-- Tools Selection -->
+      <div class="section-title">Tool Mode</div>
+      <div class="tool-tabs">
+        <button id="tool-orbit" class="tool-btn active">🖐️ Orbit</button>
+        <button id="tool-measure" class="tool-btn">📏 Measure</button>
+        <button id="tool-inspect" class="tool-btn">🔍 Inspect</button>
+      </div>
+
+      <!-- Color Shading -->
+      <div class="section-title">Color & Shading</div>
+      <div class="control-group">
+        <select id="select-colormap">
+          <option value="0">Sensor RGB / Colors</option>
+          <option value="1">Elevation: Turbo</option>
+          <option value="2">Elevation: Viridis</option>
+          <option value="3">Elevation: Plasma</option>
+          <option value="4">Elevation: Rainbow</option>
+          <option value="5">Intensity / Grayscale</option>
+        </select>
+      </div>
+
+      <div class="control-group">
+        <div class="control-row">
+          <span>Point Size</span>
+          <span id="point-size-val">3.0</span>
+        </div>
+        <input type="range" id="slider-size" min="0.5" max="15" step="0.5" value="3.0">
+      </div>
+
+      <div class="control-group">
+        <div class="control-row">
+          <span>Background</span>
+          <span id="bg-brightness-val">Dark (7%)</span>
+        </div>
+        <input type="range" id="slider-bg" min="0" max="100" step="1" value="7">
+      </div>
+
+      <!-- Camera & Projection -->
+      <div class="section-title">Camera & View</div>
+      <div class="button-grid">
+        <button id="btn-view-top" class="btn btn-secondary">Top</button>
+        <button id="btn-view-front" class="btn btn-secondary">Front</button>
+        <button id="btn-view-side" class="btn btn-secondary">Side</button>
+        <button id="btn-view-reset" class="btn btn-secondary">Iso</button>
+      </div>
+
+      <div class="control-row">
+        <span>Orthographic Mode</span>
+        <label class="switch">
+          <input type="checkbox" id="toggle-ortho">
+          <span class="slider-toggle"></span>
+        </label>
+      </div>
+
+      <div class="control-row">
+        <span>Reference Grid</span>
+        <label class="switch">
+          <input type="checkbox" id="toggle-grid" checked>
+          <span class="slider-toggle"></span>
+        </label>
+      </div>
+
+      <!-- Dataset Metadata -->
+      <div id="status-info">
+        <div>File: <span id="lbl-file" style="color: #fff;">points.txt</span></div>
+        <div>Points: <span id="lbl-points" style="color: #60a5fa;">Loading...</span></div>
+        <div id="lbl-bounds" style="font-size: 10px; color: #64748b;"></div>
+      </div>
+    </div>
+
+    <!-- Active Measurement HUD readout -->
+    <div id="measure-box">
+      <div>3D Distance: <span id="measure-3d" class="measure-val">0.00 m</span></div>
+      <div>Horiz (ΔH): <span id="measure-h" class="measure-val">0.00 m</span></div>
+      <div>Vert (ΔZ): <span id="measure-z" class="measure-val">0.00 m</span></div>
+      <button id="btn-clear-measure" class="btn btn-secondary" style="padding: 4px 8px; font-size: 11px;">Clear</button>
+    </div>
+
+    <!-- Hover Inspector Tooltip -->
+    <div id="inspector-tooltip"></div>
+
+    <div id="drop-overlay">Drop Point Cloud File Here</div>
+    <script src="./dist/bundle.js"></script>
+  </body>
+</html>
