@@ -43,26 +43,21 @@ export class FirstPersonControls {
     this.viewer.controls.enabled = !val;
 
     if (val) {
-      // Ensure perspective camera is active
-      if (this.viewer.getOrthoMode()) {
-        this.viewer.setOrthoMode(false);
-      }
-
-      const camera = this.viewer.perspCamera;
-      this.viewer.activeCamera = camera;
-
-      // Calculate yaw and pitch from current camera orientation
+      // Sync from active camera (works seamlessly in both Perspective and Orthographic modes)
+      const activeCam = this.viewer.activeCamera;
       const dir = new THREE.Vector3();
-      camera.getWorldDirection(dir);
+      activeCam.getWorldDirection(dir);
       dir.normalize();
 
-      // Yaw around Y axis (atan2(-x, -z) in Three.js right-handed coordinate system)
+      // Yaw around Y axis, Pitch around X axis
       this.euler.y = Math.atan2(-dir.x, -dir.z);
-      // Pitch around X axis
       this.euler.x = Math.asin(Math.max(-0.999, Math.min(0.999, dir.y)));
       this.euler.z = 0;
 
-      camera.quaternion.setFromEuler(this.euler);
+      // Apply to both cameras
+      this.viewer.perspCamera.quaternion.setFromEuler(this.euler);
+      this.viewer.orthoCamera.quaternion.setFromEuler(this.euler);
+      this.viewer.orthoCamera.updateProjectionMatrix();
 
       // Adaptive speed based on model scale
       const sphere = this.viewer.pointCloud?.getBoundingSphere();
@@ -80,7 +75,7 @@ export class FirstPersonControls {
       }
     } else {
       if (document.pointerLockElement === this.domElement) {
-        document.exitPointerLock();
+        document.exitPointerLock?.();
       }
       this.resetMovement();
     }
@@ -97,40 +92,45 @@ export class FirstPersonControls {
     const delta = Math.min(0.1, (time - this.lastTime) / 1000);
     this.lastTime = time;
 
-    const camera = this.viewer.perspCamera;
+    const activeCam = this.viewer.activeCamera;
     const currentSpeed = this.isTurbo ? this.baseSpeed * 2.5 : this.baseSpeed;
     const moveDist = currentSpeed * delta;
 
     const forward = new THREE.Vector3();
-    camera.getWorldDirection(forward);
+    activeCam.getWorldDirection(forward);
 
     const right = new THREE.Vector3();
-    right.crossVectors(forward, camera.up).normalize();
+    right.crossVectors(forward, activeCam.up).normalize();
 
+    const moveVector = new THREE.Vector3();
     if (this.moveForward) {
-      camera.position.addScaledVector(forward, moveDist);
+      moveVector.addScaledVector(forward, moveDist);
     }
     if (this.moveBackward) {
-      camera.position.addScaledVector(forward, -moveDist);
+      moveVector.addScaledVector(forward, -moveDist);
     }
     if (this.moveRight) {
-      camera.position.addScaledVector(right, moveDist);
+      moveVector.addScaledVector(right, moveDist);
     }
     if (this.moveLeft) {
-      camera.position.addScaledVector(right, -moveDist);
+      moveVector.addScaledVector(right, -moveDist);
     }
     if (this.moveUp) {
-      camera.position.y += moveDist;
+      moveVector.y += moveDist;
     }
     if (this.moveDown) {
-      camera.position.y -= moveDist;
+      moveVector.y -= moveDist;
     }
 
-    // Keep orbit controls target positioned forward so switching back is seamless
-    this.viewer.controls.target.copy(camera.position).addScaledVector(forward, 150);
+    // Apply translation to BOTH cameras so switching between Ortho/Persp stays in sync
+    this.viewer.perspCamera.position.add(moveVector);
+    this.viewer.orthoCamera.position.add(moveVector);
+
+    // Keep orbit controls target positioned forward so switching back to orbit is seamless
+    this.viewer.controls.target.copy(activeCam.position).addScaledVector(forward, 150);
   }
 
-  private resetMovement(): void {
+  public resetMovement(): void {
     this.moveForward = false;
     this.moveBackward = false;
     this.moveLeft = false;
@@ -142,6 +142,33 @@ export class FirstPersonControls {
   }
 
   private bindEvents(): void {
+    // Prevent right-click context menu on canvas and while fly mode is active
+    this.domElement.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+    });
+
+    window.addEventListener("contextmenu", (e) => {
+      if (this.enabled) {
+        e.preventDefault();
+        this.resetMovement();
+      }
+    });
+
+    // Reset stuck keys whenever window loses focus or pointer lock changes
+    window.addEventListener("blur", () => {
+      this.resetMovement();
+    });
+
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        this.resetMovement();
+      }
+    });
+
+    document.addEventListener("pointerlockchange", () => {
+      this.resetMovement();
+    });
+
     // Keyboard key down
     window.addEventListener("keydown", (e: KeyboardEvent) => {
       if (!this.enabled) return;
@@ -203,19 +230,25 @@ export class FirstPersonControls {
       }
     });
 
-    // Pointer / Mouse Down for drag look
+    // Pointer Down (handles left, right, and middle click drag looking)
     this.domElement.addEventListener("pointerdown", (e: PointerEvent) => {
       if (!this.enabled) return;
       this.isMouseDown = true;
       this.prevMouseX = e.clientX;
       this.prevMouseY = e.clientY;
+      if (e.button === 2) {
+        e.preventDefault();
+      }
     });
 
-    window.addEventListener("pointerup", () => {
+    window.addEventListener("pointerup", (e: PointerEvent) => {
       this.isMouseDown = false;
+      if (e.button === 2) {
+        e.preventDefault();
+      }
     });
 
-    // Pointer / Mouse Move (handles both PointerLock and Click-Drag)
+    // Pointer Move (handles both PointerLock and Click-Drag)
     window.addEventListener("pointermove", (e: PointerEvent) => {
       if (!this.enabled) return;
 
@@ -243,12 +276,27 @@ export class FirstPersonControls {
       const maxPitch = Math.PI / 2 - 0.02;
       this.euler.x = Math.max(-maxPitch, Math.min(maxPitch, this.euler.x));
 
+      // Apply rotation to both Perspective and Orthographic cameras
       this.viewer.perspCamera.quaternion.setFromEuler(this.euler);
+      this.viewer.orthoCamera.quaternion.setFromEuler(this.euler);
+      this.viewer.orthoCamera.updateProjectionMatrix();
     });
 
-    // Mouse wheel adjusts fly speed
+    // Mouse wheel adjusts fly speed (and zooms orthographic view if in ortho mode)
     this.domElement.addEventListener("wheel", (e: WheelEvent) => {
       if (!this.enabled) return;
+
+      // In Orthographic mode, mouse wheel also zooms ortho camera view
+      if (this.viewer.getOrthoMode()) {
+        const orthoZoom = e.deltaY > 0 ? 1.08 : 0.92;
+        const oCam = this.viewer.orthoCamera;
+        oCam.left *= orthoZoom;
+        oCam.right *= orthoZoom;
+        oCam.top *= orthoZoom;
+        oCam.bottom *= orthoZoom;
+        oCam.updateProjectionMatrix();
+      }
+
       const factor = e.deltaY > 0 ? 0.85 : 1.18;
       this.baseSpeed = Math.max(25, Math.min(2500, this.baseSpeed * factor));
       if (this.onSpeedChangeCallback) {

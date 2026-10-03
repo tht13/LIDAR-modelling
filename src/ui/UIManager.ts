@@ -197,10 +197,6 @@ export class UIManager {
         this.flyHint.style.display = tool === "fly" ? "flex" : "none";
 
         if (tool === "fly") {
-          if (this.viewer.getOrthoMode()) {
-            this.viewer.setOrthoMode(false);
-            this.toggleOrtho.checked = false;
-          }
           const speedEl = document.getElementById("fly-speed-val");
           if (speedEl) speedEl.textContent = this.viewer.firstPersonControls.getSpeed().toString();
           this.measureBox.style.display = "none";
