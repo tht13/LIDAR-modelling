@@ -18,6 +18,18 @@ export class SampleDatasets {
       url: "points.txt"
     },
     {
+      id: "certainty3d-las",
+      name: "🛰️ Certainty3D Color Survey (.LAS)",
+      type: "file",
+      url: "https://raw.githubusercontent.com/libLAS/libLAS/master/test/data/certainty3d-color-utm-feet-navd88.las"
+    },
+    {
+      id: "dolphins-ply",
+      name: "🐬 Stanford Dolphins (.PLY)",
+      type: "file",
+      url: "https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/models/ply/ascii/dolphins.ply"
+    },
+    {
       id: "las-survey",
       name: "🛰️ Aerial LiDAR Topography (.LAS Binary)",
       type: "binary",
