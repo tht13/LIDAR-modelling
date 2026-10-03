@@ -4,9 +4,11 @@
   "description": "LIDAR point cloud visualization tool for Desktop (Electron) and Web",
   "main": "main.js",
   "scripts": {
-    "start": "electron main.js",
-    "start:electron": "electron main.js",
+    "dev": "webpack serve --mode development --open",
+    "serve": "webpack serve --mode development --open",
     "start:web": "webpack serve --mode development --open",
+    "start:electron": "electron main.js",
+    "start": "electron main.js",
     "build": "webpack --mode production",
     "build:dev": "webpack --mode development",
     "watch": "webpack --watch --mode development"
