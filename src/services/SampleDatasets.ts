@@ -36,6 +36,12 @@ export class SampleDatasets {
       generateBinary: () => LASParser.createSampleLAS(30000)
     },
     {
+      id: "norway-fjord",
+      name: "🇳🇴 Geiranger Fjord & Cliffs (Norway LiDAR)",
+      type: "generator",
+      generate: () => SampleDatasets.generateNorwayFjord()
+    },
+    {
       id: "urban-city",
       name: "🏙️ Urban City Grid & Skyscrapers",
       type: "generator",
@@ -202,6 +208,66 @@ export class SampleDatasets {
         const x = Math.cos(theta) * ringRadius;
         const y = Math.sin(theta) * ringRadius;
         lines.push(`${x.toFixed(2)} ${y.toFixed(2)} ${z.toFixed(2)} ${rColor.toFixed(2)} ${gColor.toFixed(2)} ${bColor.toFixed(2)}`);
+      }
+    }
+
+    return lines.join("\n");
+  }
+
+  public static generateNorwayFjord(): string {
+    const lines: string[] = ["//X Y Z Rf Gf Bf"];
+    const width = 650;
+    const length = 650;
+    const step = 3.2;
+
+    const baseEasting = 412500.0;
+    const baseNorthing = 6886200.0;
+
+    for (let x = -width / 2; x <= width / 2; x += step) {
+      for (let y = -length / 2; y <= length / 2; y += step) {
+        // Glacial Fjord Channel (curving through the mountains)
+        const fjordCenter = Math.sin(y * 0.008) * 90 + Math.cos(y * 0.003) * 40;
+        const distFromCenter = Math.abs(x - fjordCenter);
+        const fjordHalfWidth = 65;
+
+        let z = 0;
+        let r = 0.45, g = 0.42, b = 0.38; // Granite rock
+
+        if (distFromCenter < fjordHalfWidth) {
+          // Fjord Water Surface
+          z = 0.0 + Math.sin(x * 0.15 + y * 0.08) * 0.3;
+          r = 0.08; g = 0.35; b = 0.58; // Deep Fjord Blue
+        } else {
+          // Steep Glacial Valley Walls rising abruptly up to 600-800m
+          const wallDist = distFromCenter - fjordHalfWidth;
+          const uProfile = Math.pow(wallDist / 140, 1.4) * 380;
+          const mountainRoughness = Math.sin(x * 0.035) * 25 + Math.cos(y * 0.025) * 35;
+          z = Math.max(5, uProfile + mountainRoughness);
+
+          // Waterfalls cascading down the cliffs
+          const isWaterfall = Math.abs(x - (fjordCenter + 75)) < 12 && z < 320;
+          if (isWaterfall) {
+            r = 0.85; g = 0.95; b = 1.0; // Frothing white water
+          } else if (z < 180) {
+            // Lower slopes: Nordic Pine & Birch forest
+            r = 0.14; g = 0.45; b = 0.20;
+            if (Math.random() > 0.55) {
+              // Add tree canopy point
+              const treeH = 8 + Math.random() * 8;
+              lines.push(`${(baseEasting + x).toFixed(2)} ${(baseNorthing + y).toFixed(2)} ${(z + treeH).toFixed(2)} 0.10 0.52 0.18`);
+            }
+          } else if (z > 450) {
+            // High Alpine Summits: Craggy scree & snow patches
+            const isSnow = Math.sin(x * 0.08) + Math.cos(y * 0.08) > 0.6;
+            if (isSnow) {
+              r = 0.94; g = 0.96; b = 0.98; // Snow
+            } else {
+              r = 0.55; g = 0.52; b = 0.50; // Bare rock
+            }
+          }
+        }
+
+        lines.push(`${(baseEasting + x).toFixed(2)} ${(baseNorthing + y).toFixed(2)} ${z.toFixed(2)} ${r.toFixed(2)} ${g.toFixed(2)} ${b.toFixed(2)}`);
       }
     }
 
