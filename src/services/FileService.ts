@@ -29,7 +29,8 @@ export class FileService {
         if (!response.ok) {
           throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
         }
-        const isBinary = pathOrUrl.toLowerCase().endsWith(".las") || pathOrUrl.toLowerCase().endsWith(".laz");
+        const lower = pathOrUrl.toLowerCase();
+        const isBinary = lower.endsWith(".las") || lower.endsWith(".laz") || lower.endsWith(".tif") || lower.endsWith(".tiff");
         const data = isBinary ? await response.arrayBuffer() : await response.text();
         return { success: true, fileName: pathOrUrl, data };
       } catch (err: any) {
@@ -61,7 +62,7 @@ export class FileService {
       return new Promise((resolve) => {
         const fileInput = document.createElement("input");
         fileInput.type = "file";
-        fileInput.accept = ".txt,.xyz,.pts,.csv,.asc,.las,.laz,.ply";
+        fileInput.accept = ".txt,.xyz,.pts,.csv,.asc,.las,.laz,.ply,.tif,.tiff";
         fileInput.style.display = "none";
 
         fileInput.onchange = () => {

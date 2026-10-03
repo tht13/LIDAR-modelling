@@ -1,5 +1,6 @@
 import { ParseResult } from "./types";
 import { LASParser } from "./services/LASParser";
+import { GeoTIFFParser } from "./services/GeoTIFFParser";
 
 const ctx: DedicatedWorkerGlobalScope = self as any;
 
@@ -24,6 +25,8 @@ ctx.onmessage = async (event: MessageEvent<any>) => {
       const probeBuf = await file.slice(0, Math.min(file.size, 1024)).arrayBuffer();
       if (LASParser.isLAS(probeBuf)) {
         result = await streamParseLAS(file, maxPoints, postProgress);
+      } else if (GeoTIFFParser.isTIFF(probeBuf)) {
+        result = await GeoTIFFParser.parse(file, maxPoints, postProgress);
       } else {
         result = await streamParseText(file, maxPoints, postProgress);
       }
@@ -34,6 +37,8 @@ ctx.onmessage = async (event: MessageEvent<any>) => {
       if (LASParser.isLAS(buffer)) {
         postProgress(30, "Parsing binary LAS...");
         result = LASParser.parse(buffer, maxPoints);
+      } else if (GeoTIFFParser.isTIFF(buffer)) {
+        result = await GeoTIFFParser.parse(buffer, maxPoints, postProgress);
       } else {
         postProgress(30, "Decoding point text...");
         const text = new TextDecoder().decode(buffer);

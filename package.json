@@ -19,6 +19,7 @@
   },
   "author": "Thomas Haakon Townsend",
   "dependencies": {
+    "geotiff": "^3.0.5",
     "three": "^0.170.0"
   },
   "devDependencies": {
