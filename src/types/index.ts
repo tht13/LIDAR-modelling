@@ -10,7 +10,7 @@ export interface ParseResult {
   hasRGB: boolean;
 }
 
-export type ToolMode = "orbit" | "measure" | "inspect" | "profile";
+export type ToolMode = "orbit" | "measure" | "profile" | "inspect" | "fly";
 
 export enum ColorMode {
   RGB = 0,

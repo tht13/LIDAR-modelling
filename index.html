@@ -171,7 +171,7 @@
       }
       .tool-tabs {
         display: grid;
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: repeat(5, 1fr);
         background: rgba(0, 0, 0, 0.3);
         border-radius: 8px;
         padding: 2px;
@@ -321,6 +321,36 @@
         font-family: monospace;
       }
 
+      /* First Person Fly Navigation Hint */
+      #fly-hint {
+        position: absolute;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(15, 17, 23, 0.92);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(59, 130, 246, 0.5);
+        padding: 8px 18px;
+        border-radius: 24px;
+        font-size: 12px;
+        color: #e2e8f0;
+        z-index: 30;
+        display: none;
+        align-items: center;
+        gap: 12px;
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
+        pointer-events: none;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }
+      .key-badge {
+        background: rgba(255, 255, 255, 0.15);
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-family: monospace;
+        font-weight: 700;
+        color: #60a5fa;
+      }
+
       #drop-overlay {
         position: absolute;
         inset: 0;
@@ -410,6 +440,7 @@
         <button id="tool-measure" class="tool-btn">📏 Dist</button>
         <button id="tool-profile" class="tool-btn">📊 Slice</button>
         <button id="tool-inspect" class="tool-btn">🔍 Info</button>
+        <button id="tool-fly" class="tool-btn">🚶 Fly</button>
       </div>
 
       <!-- Eye-Dome Lighting (EDL) -->
@@ -542,8 +573,14 @@
       <canvas id="profile-canvas"></canvas>
     </div>
 
-    <!-- Hover Inspector Tooltip -->
-    <div id="inspector-tooltip"></div>
+    <!-- First Person Fly Navigation HUD Banner -->
+    <div id="fly-hint">
+      <span><span class="key-badge">W</span><span class="key-badge">A</span><span class="key-badge">S</span><span class="key-badge">D</span> Move</span>
+      <span><span class="key-badge">Space</span> Up</span>
+      <span><span class="key-badge">C</span> Down</span>
+      <span><span class="key-badge">Shift</span> Turbo</span>
+      <span style="color: #94a3b8;">| Drag mouse to look</span>
+    </div>
 
     <div id="drop-overlay">Drop Point Cloud File Here</div>
     <script src="./dist/bundle.js"></script>

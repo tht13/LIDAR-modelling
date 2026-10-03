@@ -55,11 +55,15 @@ export class UIManager {
   private profileStats = document.getElementById("profile-stats")!;
   private btnCloseProfile = document.getElementById("btn-close-profile") as HTMLButtonElement;
 
+  // Fly Hint Element
+  private flyHint = document.getElementById("fly-hint")!;
+
   private toolButtons: Record<ToolMode, HTMLButtonElement> = {
     orbit: document.getElementById("tool-orbit") as HTMLButtonElement,
     measure: document.getElementById("tool-measure") as HTMLButtonElement,
     profile: document.getElementById("tool-profile") as HTMLButtonElement,
-    inspect: document.getElementById("tool-inspect") as HTMLButtonElement
+    inspect: document.getElementById("tool-inspect") as HTMLButtonElement,
+    fly: document.getElementById("tool-fly") as HTMLButtonElement
   };
 
   constructor(viewer: Viewer, toolManager: ToolManager) {
@@ -182,12 +186,14 @@ export class UIManager {
     });
 
     // Tool Switching
-    (["orbit", "measure", "profile", "inspect"] as ToolMode[]).forEach((tool) => {
+    (["orbit", "measure", "profile", "inspect", "fly"] as ToolMode[]).forEach((tool) => {
       this.toolButtons[tool].addEventListener("click", () => {
         this.toolManager.setMode(tool);
         Object.keys(this.toolButtons).forEach((k) => {
           this.toolButtons[k as ToolMode].classList.toggle("active", k === tool);
         });
+
+        this.flyHint.style.display = tool === "fly" ? "flex" : "none";
 
         if (tool === "measure") {
           this.measureBox.style.display = "flex";

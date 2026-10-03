@@ -30,6 +30,9 @@ export class ToolManager {
     this.activeMode = mode;
     const dom = this.viewer.renderer.domElement;
 
+    // Toggle FirstPersonControls
+    this.viewer.firstPersonControls.setEnabled(mode === "fly");
+
     if (mode === "measure") {
       dom.style.cursor = "crosshair";
       this.viewer.controls.enabled = false;
@@ -45,6 +48,11 @@ export class ToolManager {
     } else if (mode === "inspect") {
       dom.style.cursor = "crosshair";
       this.viewer.controls.enabled = true;
+      this.measurementTool.clear();
+      this.profileTool.clear();
+    } else if (mode === "fly") {
+      dom.style.cursor = "grab";
+      this.inspectorTool.clear();
       this.measurementTool.clear();
       this.profileTool.clear();
     } else {

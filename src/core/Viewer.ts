@@ -3,6 +3,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { PointCloud } from "./PointCloud";
 import { EDLPass } from "../shaders/EDLPass";
 import { CameraPreset } from "../types";
+import { FirstPersonControls } from "../tools/FirstPersonControls";
 
 export class Viewer {
   public readonly scene: THREE.Scene;
@@ -11,6 +12,7 @@ export class Viewer {
   public readonly orthoCamera: THREE.OrthographicCamera;
   public activeCamera: THREE.Camera;
   public readonly controls: OrbitControls;
+  public readonly firstPersonControls: FirstPersonControls;
   public readonly gridHelper: THREE.GridHelper;
   public readonly edlPass: EDLPass;
   public pointCloud: PointCloud | null = null;
@@ -39,6 +41,8 @@ export class Viewer {
     this.controls = new OrbitControls(this.activeCamera, this.renderer.domElement);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.05;
+
+    this.firstPersonControls = new FirstPersonControls(this);
 
     // Lighting
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
@@ -179,7 +183,11 @@ export class Viewer {
 
   private animate = (): void => {
     requestAnimationFrame(this.animate);
-    this.controls.update();
+    if (this.firstPersonControls && this.firstPersonControls.isEnabled()) {
+      this.firstPersonControls.update();
+    } else {
+      this.controls.update();
+    }
     this.edlPass.render(this.renderer, this.scene, this.activeCamera);
   };
 }
