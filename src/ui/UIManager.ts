@@ -9,6 +9,9 @@ export class UIManager {
   private onFileOpenCallback: ((text: string, fileName: string) => void) | null = null;
 
   // DOM Elements
+  private uiPanel = document.getElementById("ui-panel")!;
+  private btnFloatingMenu = document.getElementById("btn-floating-menu") as HTMLButtonElement;
+  private btnMinimizeMenu = document.getElementById("btn-minimize-menu") as HTMLButtonElement;
   private lblFile = document.getElementById("lbl-file")!;
   private lblPoints = document.getElementById("lbl-points")!;
   private lblBounds = document.getElementById("lbl-bounds")!;
@@ -66,7 +69,40 @@ export class UIManager {
     return this.toggleOrtho.checked;
   }
 
+  public minimizeMenu(): void {
+    this.uiPanel.classList.add("minimized");
+    this.btnFloatingMenu.style.display = "flex";
+  }
+
+  public expandMenu(): void {
+    this.uiPanel.classList.remove("minimized");
+    this.btnFloatingMenu.style.display = "none";
+  }
+
+  public toggleMenu(): void {
+    if (this.uiPanel.classList.contains("minimized")) {
+      this.expandMenu();
+    } else {
+      this.minimizeMenu();
+    }
+  }
+
   private bindEvents(): void {
+    // Minimize / Expand Menu
+    this.btnMinimizeMenu?.addEventListener("click", () => this.minimizeMenu());
+    this.btnFloatingMenu?.addEventListener("click", () => this.expandMenu());
+
+    // Keyboard shortcut 'M' to toggle menu
+    window.addEventListener("keydown", (e: KeyboardEvent) => {
+      if (e.key === "m" || e.key === "M") {
+        const target = e.target as HTMLElement;
+        if (target && (target.tagName === "INPUT" || target.tagName === "SELECT" || target.tagName === "TEXTAREA")) {
+          return;
+        }
+        this.toggleMenu();
+      }
+    });
+
     // Tool Switching
     (["orbit", "measure", "inspect"] as ToolMode[]).forEach((tool) => {
       this.toolButtons[tool].addEventListener("click", () => {
