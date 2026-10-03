@@ -7,6 +7,7 @@ A high-performance, interactive 3D LIDAR and point cloud visualization tool buil
 ## ✨ Features
 
 - 🚀 **High-Performance WebGL Engine:** Single draw-call rendering via `THREE.Points` and contiguous `Float32Array` buffers for rendering hundreds of thousands of points at a locked 60 FPS.
+- 🎨 **Eye-Dome Lighting (EDL):** Screen-space post-processing depth shader to accentuate silhouettes, terrain relief, and crevices.
 - ⚡ **Background Web Worker Parser:** Zero-UI-freeze file parsing using `Transferable Objects` and line-by-line char scanning.
 - 🎨 **Instant GPU Colormaps:**
   - Sensor RGB (True Colors)
@@ -21,40 +22,19 @@ A high-performance, interactive 3D LIDAR and point cloud visualization tool buil
 - 🔍 **Real-Time Point Inspector:** Hover to inspect exact Easting ($X$), Northing ($Y$), and Elevation ($Z$) in meters.
 - 🎥 **Camera Navigation & Presets:** Quick alignment to **Top (Plan)**, **Front**, **Side**, and **Isometric**, with switchable **Perspective / Orthographic** projection.
 - 📸 **High-Resolution Snapshot:** One-click PNG snapshot export.
+- 🗕 **Collapsible & Mobile Ready:** Minimize menu button with responsive mobile layout and `M` shortcut.
 - 📂 **Multi-Format & Drag-and-Drop:** Native file open dialog and direct drag-and-drop for `.txt`, `.xyz`, `.pts`, `.csv`, `.asc`.
 - 🌐 **Dual Target:** Runs natively on Desktop via Electron or as a static Web App in any browser.
 
 ---
 
-## 🚀 Quick Start
+## 🚀 NPM Commands Matrix
 
-### Prerequisites
-- Node.js $\ge 18$
-- npm $\ge 9$
-
-### Installation
-```bash
-git clone https://github.com/tht13/LIDAR-modelling.git
-cd LIDAR-modelling
-npm install
-```
-
-### Running Desktop App (Electron)
-```bash
-npm run start:electron
-# or
-npm start
-```
-
-### Running Web Application (Browser Dev Server)
-```bash
-npm run start:web
-```
-
-### Building for Production
-```bash
-npm run build
-```
+| Task | Web Application (Browser) | Desktop Application (Electron) |
+| :--- | :--- | :--- |
+| ⚡ **Live Dev / Watch** | `npm run dev:web` *(or `npm run dev`)* | `npm run dev:electron` |
+| 🏗️ **Production Build** | `npm run build:web` *(or `npm run build`)* | `npm run build:electron` |
+| ▶️ **Run Application** | `npm run start:web` | `npm run start:electron` *(or `npm start`)* |
 
 ---
 

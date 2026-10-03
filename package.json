@@ -4,14 +4,15 @@
   "description": "LIDAR point cloud visualization tool for Desktop (Electron) and Web",
   "main": "main.js",
   "scripts": {
-    "dev": "webpack serve --mode development --open",
-    "serve": "webpack serve --mode development --open",
-    "start:web": "webpack serve --mode development --open",
-    "start:electron": "electron main.js",
-    "start": "electron main.js",
-    "build": "webpack --mode production",
-    "build:dev": "webpack --mode development",
-    "watch": "webpack --watch --mode development"
+    "dev": "npm run dev:web",
+    "dev:web": "webpack serve --mode development --open",
+    "dev:electron": "concurrently \"webpack --watch --mode development\" \"electron main.js\"",
+    "build": "npm run build:web",
+    "build:web": "webpack --mode production",
+    "build:electron": "webpack --mode production",
+    "start": "npm run start:electron",
+    "start:web": "webpack serve --mode production --open",
+    "start:electron": "electron main.js"
   },
   "repository": {
     "type": "git"
@@ -23,6 +24,7 @@
   "devDependencies": {
     "@types/node": "^22.18.0",
     "@types/three": "^0.170.0",
+    "concurrently": "^9.1.2",
     "electron": "^37.3.1",
     "ts-loader": "^9.5.2",
     "typescript": "^5.7.0",
