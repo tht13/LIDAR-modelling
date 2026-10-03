@@ -8,7 +8,7 @@ import { ExportService } from "../services/ExportService";
 export class UIManager {
   private viewer: Viewer;
   private toolManager: ToolManager;
-  private onFileOpenCallback: ((data: string | ArrayBuffer, fileName: string) => void) | null = null;
+  private onFileOpenCallback: ((data: string | ArrayBuffer | File, fileName: string) => void) | null = null;
   private onDatasetSelectCallback: ((datasetId: string) => void) | null = null;
 
   // DOM Elements
@@ -58,6 +58,9 @@ export class UIManager {
 
   // Fly Hint Element
   private flyHint = document.getElementById("fly-hint")!;
+  private selectImportBudget = document.getElementById("select-import-budget") as HTMLSelectElement | null;
+  private importBudgetVal = document.getElementById("import-budget-val");
+  private onImportBudgetCallback: ((budget: number) => void) | null = null;
 
   private toolButtons: Record<ToolMode, HTMLButtonElement> = {
     orbit: document.getElementById("tool-orbit") as HTMLButtonElement,
@@ -75,12 +78,20 @@ export class UIManager {
     this.bindToolCallbacks();
   }
 
-  public onFileOpen(cb: (data: string | ArrayBuffer, fileName: string) => void): void {
+  public onFileOpen(cb: (data: string | ArrayBuffer | File, fileName: string) => void): void {
     this.onFileOpenCallback = cb;
   }
 
   public onDatasetSelect(cb: (datasetId: string) => void): void {
     this.onDatasetSelectCallback = cb;
+  }
+
+  public getImportBudget(): number {
+    return this.selectImportBudget ? parseInt(this.selectImportBudget.value, 10) : 5_000_000;
+  }
+
+  public onImportBudgetChange(cb: (budget: number) => void): void {
+    this.onImportBudgetCallback = cb;
   }
 
   public updateStatus(fileName: string, statusText: string, boundsText: string = ""): void {
@@ -344,18 +355,32 @@ export class UIManager {
       }
     });
 
-    // Drag and Drop
+    // Import Point Budget Selector
+    this.selectImportBudget?.addEventListener("change", () => {
+      const budget = parseInt(this.selectImportBudget!.value, 10);
+      if (this.importBudgetVal) {
+        if (budget === 0) {
+          this.importBudgetVal.textContent = "Unlimited";
+        } else if (budget >= 1_000_000) {
+          this.importBudgetVal.textContent = `${(budget / 1_000_000).toFixed(0)}M (60 FPS)`;
+        } else {
+          this.importBudgetVal.textContent = `${budget.toLocaleString()}`;
+        }
+      }
+      if (this.onImportBudgetCallback) {
+        this.onImportBudgetCallback(budget);
+      }
+    });
+
+    // Drag and Drop - passes File object directly for zero-copy streaming
     window.addEventListener("dragover", (e) => { e.preventDefault(); this.dropOverlay.style.display = "flex"; });
     window.addEventListener("dragleave", (e) => { if (e.relatedTarget === null) this.dropOverlay.style.display = "none"; });
-    window.addEventListener("drop", async (e) => {
+    window.addEventListener("drop", (e) => {
       e.preventDefault();
       this.dropOverlay.style.display = "none";
       if (e.dataTransfer && e.dataTransfer.files.length > 0 && this.onFileOpenCallback) {
         const file = e.dataTransfer.files[0];
-        const ext = file.name.toLowerCase();
-        const isBinary = ext.endsWith(".las") || ext.endsWith(".laz");
-        const data = isBinary ? await file.arrayBuffer() : await file.text();
-        this.onFileOpenCallback(data, file.name);
+        this.onFileOpenCallback(file, file.name);
       }
     });
   }

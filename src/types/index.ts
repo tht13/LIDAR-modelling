@@ -3,6 +3,9 @@ export interface ParseResult {
   colors: Float32Array;
   elevations: Float32Array;
   count: number;
+  totalPoints?: number;
+  subsampled?: boolean;
+  stride?: number;
   min: [number, number, number];
   max: [number, number, number];
   center: [number, number, number];

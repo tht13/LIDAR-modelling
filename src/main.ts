@@ -11,14 +11,24 @@ class App {
   private toolManager: ToolManager;
   private uiManager: UIManager;
   private parserWorker: Worker;
+  private currentFileName: string = "points.txt";
+  private maxImportPoints: number = 5_000_000;
 
   constructor() {
     this.viewer = new Viewer();
     this.toolManager = new ToolManager(this.viewer);
     this.uiManager = new UIManager(this.viewer, this.toolManager);
+    this.maxImportPoints = this.uiManager.getImportBudget();
 
     this.parserWorker = new Worker(new URL("./parser.worker.ts", import.meta.url));
-    this.parserWorker.onmessage = (e: MessageEvent<{ success?: boolean; data?: ParseResult; error?: string }>) => {
+    this.parserWorker.onmessage = (e: MessageEvent<any>) => {
+      if (e.data.type === "progress") {
+        this.uiManager.setProgress(e.data.percent);
+        if (e.data.statusText) {
+          this.uiManager.updateStatus(this.currentFileName, e.data.statusText);
+        }
+        return;
+      }
       this.handleWorkerMessage(e.data);
     };
 
@@ -28,6 +38,10 @@ class App {
 
     this.uiManager.onDatasetSelect((datasetId) => {
       this.loadDatasetById(datasetId);
+    });
+
+    this.uiManager.onImportBudgetChange((budget) => {
+      this.maxImportPoints = budget;
     });
   }
 
@@ -94,15 +108,30 @@ class App {
     }
   }
 
-  private processFileData(data: string | ArrayBuffer, fileName: string): void {
-    this.uiManager.updateStatus(fileName, "Parsing points in background...");
-    this.uiManager.setProgress(85);
+  private processFileData(data: string | ArrayBuffer | File, fileName: string): void {
+    this.currentFileName = fileName;
+    this.uiManager.updateStatus(fileName, "Preparing point cloud...");
+    this.uiManager.setProgress(10);
     this.toolManager.measurementTool.clear();
 
-    if (data instanceof ArrayBuffer) {
-      this.parserWorker.postMessage(data, [data]);
+    if (data instanceof File || (typeof Blob !== "undefined" && data instanceof Blob)) {
+      this.parserWorker.postMessage({
+        type: "parse-file",
+        file: data,
+        maxPoints: this.maxImportPoints
+      });
+    } else if (data instanceof ArrayBuffer) {
+      this.parserWorker.postMessage({
+        type: "parse-buffer",
+        buffer: data,
+        maxPoints: this.maxImportPoints
+      }, [data]);
     } else {
-      this.parserWorker.postMessage(data);
+      this.parserWorker.postMessage({
+        type: "parse-text",
+        text: data,
+        maxPoints: this.maxImportPoints
+      });
     }
   }
 
@@ -110,7 +139,7 @@ class App {
     this.uiManager.setProgress(null);
 
     if (msg.error || !msg.data) {
-      this.uiManager.updateStatus("Error", "Failed to parse points data");
+      this.uiManager.updateStatus("Error", msg.error || "Failed to parse points data");
       console.error("Worker error:", msg.error);
       return;
     }
@@ -127,9 +156,15 @@ class App {
     this.uiManager.setColormapValue(defaultColorMode);
 
     const boundsText = `Extents: ${data.size[0].toFixed(1)}m × ${data.size[2].toFixed(1)}m | Elev: ${data.size[1].toFixed(1)}m`;
+    let countSummary = `${data.count.toLocaleString()} points`;
+    if (data.subsampled && data.totalPoints && data.totalPoints > data.count) {
+      const pct = ((data.count / data.totalPoints) * 100).toFixed(1);
+      countSummary = `${data.count.toLocaleString()} pts (${pct}% of ${(data.totalPoints).toLocaleString()} pts)`;
+    }
+
     this.uiManager.updateStatus(
-      document.getElementById("lbl-file")?.textContent || "points.txt",
-      `${data.count.toLocaleString()} points`,
+      this.currentFileName,
+      countSummary,
       boundsText
     );
   }

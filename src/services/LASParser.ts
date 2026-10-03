@@ -12,8 +12,9 @@ export class LASParser {
 
   /**
    * Parse a binary LAS file (LAS 1.0 - 1.4, Point Formats 0, 1, 2, 3, 6, 7, 8)
+   * Supports stride decimation to guarantee safe memory usage on large files.
    */
-  public static parse(buffer: ArrayBuffer): ParseResult {
+  public static parse(buffer: ArrayBuffer, maxPoints: number = 5_000_000): ParseResult {
     const view = new DataView(buffer);
 
     // Verify signature
@@ -24,7 +25,6 @@ export class LASParser {
 
     const versionMajor = view.getUint8(24);
     const versionMinor = view.getUint8(25);
-    const headerSize = view.getUint16(94, true);
     const offsetToPoints = view.getUint32(96, true);
     const pointFormat = view.getUint8(104);
     const pointRecordLength = view.getUint16(105, true);
@@ -67,57 +67,24 @@ export class LASParser {
     else if (pointFormat === 3) rgbOffset = 28;
     else if (pointFormat === 7 || pointFormat === 8) rgbOffset = 30;
 
-    // First pass or using header bounds
-    let computedMinX = Infinity, computedMaxX = -Infinity;
-    let computedMinY = Infinity, computedMaxY = -Infinity;
-    let computedMinZ = Infinity, computedMaxZ = -Infinity;
-
-    // Temporary storage for raw coords
-    const rawX = new Float64Array(pointCount);
-    const rawY = new Float64Array(pointCount);
-    const rawZ = new Float64Array(pointCount);
-    const rawR = hasRGB ? new Float32Array(pointCount) : null;
-    const rawG = hasRGB ? new Float32Array(pointCount) : null;
-    const rawB = hasRGB ? new Float32Array(pointCount) : null;
-
-    let maxColorVal = 0;
-
-    for (let i = 0; i < pointCount; i++) {
-      const pOffset = offsetToPoints + i * pointRecordLength;
-      if (pOffset + 12 > buffer.byteLength) break;
-
-      const px = view.getInt32(pOffset, true) * scaleX + offsetX;
-      const py = view.getInt32(pOffset + 4, true) * scaleY + offsetY;
-      const pz = view.getInt32(pOffset + 8, true) * scaleZ + offsetZ;
-
-      rawX[i] = px;
-      rawY[i] = py;
-      rawZ[i] = pz;
-
-      if (px < computedMinX) computedMinX = px;
-      if (px > computedMaxX) computedMaxX = px;
-      if (py < computedMinY) computedMinY = py;
-      if (py > computedMaxY) computedMaxY = py;
-      if (pz < computedMinZ) computedMinZ = pz;
-      if (pz > computedMaxZ) computedMaxZ = pz;
-
-      if (hasRGB && rawR && rawG && rawB && rgbOffset > 0 && pOffset + rgbOffset + 6 <= buffer.byteLength) {
-        const r = view.getUint16(pOffset + rgbOffset, true);
-        const g = view.getUint16(pOffset + rgbOffset + 2, true);
-        const b = view.getUint16(pOffset + rgbOffset + 4, true);
-        rawR[i] = r;
-        rawG[i] = g;
-        rawB[i] = b;
-        if (r > maxColorVal) maxColorVal = r;
-        if (g > maxColorVal) maxColorVal = g;
-        if (b > maxColorVal) maxColorVal = b;
+    // Check if header bounding box is valid. If uninitialized, quickly sample bounds.
+    let validBounds = (maxX > minX || maxY > minY || maxZ > minZ) && isFinite(minX) && isFinite(maxX);
+    if (!validBounds) {
+      minX = Infinity; maxX = -Infinity;
+      minY = Infinity; maxY = -Infinity;
+      minZ = Infinity; maxZ = -Infinity;
+      const sampleStride = Math.max(1, Math.floor(pointCount / 1000));
+      for (let i = 0; i < pointCount; i += sampleStride) {
+        const off = offsetToPoints + i * pointRecordLength;
+        if (off + 12 > buffer.byteLength) break;
+        const px = view.getInt32(off, true) * scaleX + offsetX;
+        const py = view.getInt32(off + 4, true) * scaleY + offsetY;
+        const pz = view.getInt32(off + 8, true) * scaleZ + offsetZ;
+        if (px < minX) minX = px; if (px > maxX) maxX = px;
+        if (py < minY) minY = py; if (py > maxY) maxY = py;
+        if (pz < minZ) minZ = pz; if (pz > maxZ) maxZ = pz;
       }
-    }
-
-    if (computedMinX !== Infinity) {
-      minX = computedMinX; maxX = computedMaxX;
-      minY = computedMinY; maxY = computedMaxY;
-      minZ = computedMinZ; maxZ = computedMaxZ;
+      if (!isFinite(minX)) { minX = 0; maxX = 1; minY = 0; maxY = 1; minZ = 0; maxZ = 1; }
     }
 
     const centerX = (minX + maxX) / 2;
@@ -125,40 +92,76 @@ export class LASParser {
     const centerZ = (minZ + maxZ) / 2;
     const zSpan = maxZ - minZ || 1.0;
 
-    const positions = new Float32Array(pointCount * 3);
-    const colors = new Float32Array(pointCount * 3);
-    const elevations = new Float32Array(pointCount);
+    // Calculate stride for target point budget
+    const stride = (maxPoints > 0 && pointCount > maxPoints) ? Math.ceil(pointCount / maxPoints) : 1;
+    const targetCount = Math.ceil(pointCount / stride);
 
+    const positions = new Float32Array(targetCount * 3);
+    const colors = new Float32Array(targetCount * 3);
+    const elevations = new Float32Array(targetCount);
+
+    // Fast check for RGB bit depth (16-bit vs 8-bit)
+    let maxColorVal = 0;
+    if (hasRGB && rgbOffset > 0) {
+      const probePoints = Math.min(pointCount, 2000);
+      for (let i = 0; i < probePoints; i += Math.max(1, Math.floor(probePoints / 100))) {
+        const off = offsetToPoints + i * pointRecordLength + rgbOffset;
+        if (off + 6 <= buffer.byteLength) {
+          const r = view.getUint16(off, true);
+          const g = view.getUint16(off + 2, true);
+          const b = view.getUint16(off + 4, true);
+          if (r > maxColorVal) maxColorVal = r;
+          if (g > maxColorVal) maxColorVal = g;
+          if (b > maxColorVal) maxColorVal = b;
+        }
+      }
+    }
     const colorDivisor = maxColorVal > 255 ? 65535.0 : (maxColorVal > 1.0 ? 255.0 : 1.0);
 
-    for (let i = 0; i < pointCount; i++) {
-      const rx = rawX[i];
-      const ry = rawY[i];
-      const rz = rawZ[i];
+    let outIndex = 0;
+    for (let i = 0; i < pointCount && outIndex < targetCount; i += stride) {
+      const pOffset = offsetToPoints + i * pointRecordLength;
+      if (pOffset + 12 > buffer.byteLength) break;
+
+      const px = view.getInt32(pOffset, true) * scaleX + offsetX;
+      const py = view.getInt32(pOffset + 4, true) * scaleY + offsetY;
+      const pz = view.getInt32(pOffset + 8, true) * scaleZ + offsetZ;
 
       // Coordinate mapping: Three.js (X, Y=Elev, Z=Northing)
-      positions[i * 3] = rx - centerX;
-      positions[i * 3 + 1] = rz - centerZ;
-      positions[i * 3 + 2] = ry - centerY;
+      positions[outIndex * 3] = px - centerX;
+      positions[outIndex * 3 + 1] = pz - centerZ;
+      positions[outIndex * 3 + 2] = py - centerY;
 
-      if (hasRGB && rawR && rawG && rawB) {
-        colors[i * 3] = rawR[i] / colorDivisor;
-        colors[i * 3 + 1] = rawG[i] / colorDivisor;
-        colors[i * 3 + 2] = rawB[i] / colorDivisor;
+      elevations[outIndex] = (pz - minZ) / zSpan;
+
+      if (hasRGB && rgbOffset > 0 && pOffset + rgbOffset + 6 <= buffer.byteLength) {
+        const r = view.getUint16(pOffset + rgbOffset, true);
+        const g = view.getUint16(pOffset + rgbOffset + 2, true);
+        const b = view.getUint16(pOffset + rgbOffset + 4, true);
+        colors[outIndex * 3] = r / colorDivisor;
+        colors[outIndex * 3 + 1] = g / colorDivisor;
+        colors[outIndex * 3 + 2] = b / colorDivisor;
       } else {
-        colors[i * 3] = 1.0;
-        colors[i * 3 + 1] = 1.0;
-        colors[i * 3 + 2] = 1.0;
+        colors[outIndex * 3] = 1.0;
+        colors[outIndex * 3 + 1] = 1.0;
+        colors[outIndex * 3 + 2] = 1.0;
       }
 
-      elevations[i] = (rz - minZ) / zSpan;
+      outIndex++;
     }
 
+    const finalPositions = outIndex === targetCount ? positions : positions.subarray(0, outIndex * 3);
+    const finalColors = outIndex === targetCount ? colors : colors.subarray(0, outIndex * 3);
+    const finalElevations = outIndex === targetCount ? elevations : elevations.subarray(0, outIndex);
+
     return {
-      positions,
-      colors,
-      elevations,
-      count: pointCount,
+      positions: finalPositions,
+      colors: finalColors,
+      elevations: finalElevations,
+      count: outIndex,
+      totalPoints: pointCount,
+      subsampled: stride > 1,
+      stride,
       min: [minX, minZ, minY],
       max: [maxX, maxZ, maxY],
       center: [centerX, centerZ, centerY],

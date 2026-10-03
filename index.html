@@ -496,7 +496,21 @@
       </div>
 
       <!-- Downsampling & Filter -->
-      <div class="section-title">Voxel Filter & Density</div>
+      <div class="section-title">Streaming & Density</div>
+      <div class="control-group">
+        <div class="control-row">
+          <span>Import Point Budget</span>
+          <span id="import-budget-val">5M (60 FPS)</span>
+        </div>
+        <select id="select-import-budget">
+          <option value="2000000">2M Pts (Fastest / Mobile)</option>
+          <option value="5000000" selected>5M Pts (Recommended 60 FPS)</option>
+          <option value="10000000">10M Pts (High Density)</option>
+          <option value="20000000">20M Pts (Ultra / High VRAM)</option>
+          <option value="0">Unlimited (Full Resolution)</option>
+        </select>
+      </div>
+
       <div class="control-group">
         <div class="control-row">
           <span>Voxel Downsampling</span>

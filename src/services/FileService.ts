@@ -42,7 +42,7 @@ export class FileService {
    * Prompts the user to select a point cloud file:
    * Uses Native OS Dialog in Electron, or HTML5 <input type="file"> in Web Browser.
    */
-  public static async openFilePicker(): Promise<{ success: boolean; canceled?: boolean; fileName?: string; data?: string | ArrayBuffer; error?: string }> {
+  public static async openFilePicker(): Promise<{ success: boolean; canceled?: boolean; fileName?: string; data?: string | ArrayBuffer | File; error?: string }> {
     if (this.isElectron()) {
       try {
         const res = await window.electronAPI.openFileDialog();
@@ -57,29 +57,22 @@ export class FileService {
         return { success: false, error: err?.message || String(err) };
       }
     } else {
-      // Browser: standard HTML5 file picker
+      // Browser: standard HTML5 file picker - return File directly for streaming
       return new Promise((resolve) => {
         const fileInput = document.createElement("input");
         fileInput.type = "file";
         fileInput.accept = ".txt,.xyz,.pts,.csv,.asc,.las,.laz,.ply";
         fileInput.style.display = "none";
 
-        fileInput.onchange = async () => {
+        fileInput.onchange = () => {
           if (fileInput.files && fileInput.files.length > 0) {
             const file = fileInput.files[0];
-            try {
-              const ext = file.name.toLowerCase();
-              const isBinary = ext.endsWith(".las") || ext.endsWith(".laz");
-              const data = isBinary ? await file.arrayBuffer() : await file.text();
-              resolve({
-                success: true,
-                canceled: false,
-                fileName: file.name,
-                data
-              });
-            } catch (err: any) {
-              resolve({ success: false, error: err?.message || "Failed to read file" });
-            }
+            resolve({
+              success: true,
+              canceled: false,
+              fileName: file.name,
+              data: file
+            });
           } else {
             resolve({ success: false, canceled: true });
           }
