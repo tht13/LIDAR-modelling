@@ -196,7 +196,16 @@ export class UIManager {
 
         this.flyHint.style.display = tool === "fly" ? "flex" : "none";
 
-        if (tool === "measure") {
+        if (tool === "fly") {
+          if (this.viewer.getOrthoMode()) {
+            this.viewer.setOrthoMode(false);
+            this.toggleOrtho.checked = false;
+          }
+          const speedEl = document.getElementById("fly-speed-val");
+          if (speedEl) speedEl.textContent = this.viewer.firstPersonControls.getSpeed().toString();
+          this.measureBox.style.display = "none";
+          this.profilePanel.style.display = "none";
+        } else if (tool === "measure") {
           this.measureBox.style.display = "flex";
           this.measure3d.textContent = "Click first point on point cloud...";
           this.measureH.textContent = "-";
@@ -210,6 +219,12 @@ export class UIManager {
           this.profilePanel.style.display = "none";
         }
       });
+    });
+
+    // Sync Fly Speed updates to HUD banner
+    this.viewer.firstPersonControls.onSpeedChange((speed) => {
+      const speedEl = document.getElementById("fly-speed-val");
+      if (speedEl) speedEl.textContent = speed.toString();
     });
 
     // Colormap selection

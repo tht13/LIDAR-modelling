@@ -123,6 +123,10 @@ export class Viewer {
     }
   }
 
+  public getOrthoMode(): boolean {
+    return this.isOrthoMode;
+  }
+
   public setCameraPreset(preset: CameraPreset): void {
     if (!this.pointCloud) return;
     const sphere = this.pointCloud.getBoundingSphere();
