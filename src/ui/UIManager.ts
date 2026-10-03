@@ -120,6 +120,32 @@ export class UIManager {
     }
   }
 
+  public addImportedDataset(id: string, name: string): void {
+    const group = document.getElementById("group-imported") as HTMLOptGroupElement | null;
+    const noImportedOpt = document.getElementById("opt-no-imported");
+    if (noImportedOpt) {
+      noImportedOpt.remove();
+    }
+
+    if (this.selectDataset) {
+      const escapedId = typeof CSS !== "undefined" && CSS.escape ? CSS.escape(id) : id.replace(/["\\]/g, "\\$&");
+      let existingOpt = this.selectDataset.querySelector(`option[value="${escapedId}"]`) as HTMLOptionElement | null;
+      if (existingOpt) {
+        existingOpt.textContent = name;
+      } else {
+        const newOpt = document.createElement("option");
+        newOpt.value = id;
+        newOpt.textContent = name;
+        if (group) {
+          group.appendChild(newOpt);
+        } else {
+          this.selectDataset.appendChild(newOpt);
+        }
+      }
+      this.selectDataset.value = id;
+    }
+  }
+
   public getPointSize(): number {
     return parseFloat(this.sliderSize.value) || 3.0;
   }
@@ -172,9 +198,9 @@ export class UIManager {
     this.selectDataset?.addEventListener("change", () => {
       const selected = this.selectDataset.value;
       if (selected === "custom-url") {
-        const url = prompt("Enter public URL of point cloud (.txt, .xyz, .csv, .pts):");
-        if (url && this.onDatasetSelectCallback) {
-          this.onDatasetSelectCallback(`url:${url}`);
+        const url = prompt("Enter public URL of point cloud (.txt, .xyz, .csv, .pts, .las, .laz, .ply, .tif):");
+        if (url && url.trim() && this.onDatasetSelectCallback) {
+          this.onDatasetSelectCallback(`url:${url.trim()}`);
         } else {
           this.selectDataset.value = "mountain-lidar";
         }

@@ -13,6 +13,7 @@ class App {
   private parserWorker: Worker;
   private currentFileName: string = "points.txt";
   private maxImportPoints: number = 5_000_000;
+  private importedDatasets: Map<string, { id: string; name: string; displayName: string; data?: string | ArrayBuffer | File; url?: string }> = new Map();
 
   constructor() {
     this.viewer = new Viewer();
@@ -39,7 +40,7 @@ class App {
     };
 
     this.uiManager.onFileOpen((data, fileName) => {
-      this.processFileData(data, fileName);
+      this.registerAndLoadImportedFile(data, fileName);
     });
 
     this.uiManager.onDatasetSelect((datasetId) => {
@@ -71,6 +72,18 @@ class App {
       return;
     }
 
+    if (this.importedDatasets.has(datasetId)) {
+      const entry = this.importedDatasets.get(datasetId)!;
+      this.uiManager.setDatasetValue(entry.id);
+      window.location.hash = `dataset=${encodeURIComponent(entry.id)}`;
+      if (entry.data) {
+        this.processFileData(entry.data, entry.name);
+      } else if (entry.url) {
+        await this.loadFromUrl(entry.url, entry.id);
+      }
+      return;
+    }
+
     const found = SampleDatasets.list.find((d) => d.id === datasetId);
     if (!found) {
       await this.loadFromUrl("points.txt");
@@ -97,8 +110,27 @@ class App {
     }
   }
 
-  private async loadFromUrl(url: string): Promise<void> {
-    const fileName = url.split("/").pop() || "points.txt";
+  private registerAndLoadImportedFile(data: string | ArrayBuffer | File, fileName: string): void {
+    const slug = fileName.toLowerCase().replace(/[^a-z0-9_-]/g, "_");
+    const importId = `imported-${slug}`;
+    const icon = this.getFileIcon(fileName);
+    const displayName = `${icon} ${fileName}`;
+
+    this.importedDatasets.set(importId, {
+      id: importId,
+      name: fileName,
+      displayName: displayName,
+      data: data
+    });
+
+    this.uiManager.addImportedDataset(importId, displayName);
+    window.location.hash = `dataset=${encodeURIComponent(importId)}`;
+    this.processFileData(data, fileName);
+  }
+
+  private async loadFromUrl(url: string, selectId?: string): Promise<void> {
+    const cleanUrl = url.split("?")[0];
+    const fileName = cleanUrl.split("/").pop() || "dataset.txt";
     this.uiManager.updateStatus(fileName, "Downloading point cloud...");
     this.uiManager.setProgress(30);
 
@@ -106,6 +138,21 @@ class App {
     this.uiManager.setProgress(70);
 
     if (res.success && res.data) {
+      const isSampleUrl = SampleDatasets.list.some((s) => s.url === url);
+      if (!isSampleUrl) {
+        const importId = selectId || `url-${Math.abs(this.hashString(url)).toString(36)}`;
+        const icon = this.getFileIcon(fileName);
+        const displayName = `${icon} ${fileName} (URL)`;
+        this.importedDatasets.set(importId, {
+          id: importId,
+          name: fileName,
+          displayName: displayName,
+          data: res.data,
+          url: url
+        });
+        this.uiManager.addImportedDataset(importId, displayName);
+        window.location.hash = `dataset=${encodeURIComponent(importId)}`;
+      }
       this.processFileData(res.data, res.fileName || fileName);
     } else {
       this.uiManager.setProgress(null);
@@ -127,11 +174,13 @@ class App {
         maxPoints: this.maxImportPoints
       });
     } else if (data instanceof ArrayBuffer) {
+      // Transfer a slice of the ArrayBuffer so the original stored in importedDatasets remains intact
+      const bufferCopy = data.slice(0);
       this.parserWorker.postMessage({
         type: "parse-buffer",
-        buffer: data,
+        buffer: bufferCopy,
         maxPoints: this.maxImportPoints
-      }, [data]);
+      }, [bufferCopy]);
     } else {
       this.parserWorker.postMessage({
         type: "parse-text",
@@ -139,6 +188,24 @@ class App {
         maxPoints: this.maxImportPoints
       });
     }
+  }
+
+  private getFileIcon(fileName: string): string {
+    const ext = fileName.toLowerCase().split(".").pop() || "";
+    if (["tif", "tiff", "geotiff"].includes(ext)) return "🗺️";
+    if (["las", "laz"].includes(ext)) return "🛰️";
+    if (["ply"].includes(ext)) return "🐬";
+    if (["xyz", "txt", "csv", "pts"].includes(ext)) return "📄";
+    return "📁";
+  }
+
+  private hashString(str: string): number {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = (hash << 5) - hash + str.charCodeAt(i);
+      hash |= 0;
+    }
+    return hash;
   }
 
   private handleWorkerMessage(msg: { success?: boolean; data?: ParseResult; error?: string }): void {
