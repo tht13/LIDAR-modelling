@@ -461,6 +461,31 @@
         <input type="range" id="slider-bg" min="0" max="100" step="1" value="7">
       </div>
 
+      <!-- Downsampling & Filter -->
+      <div class="section-title">Voxel Filter & Density</div>
+      <div class="control-group">
+        <div class="control-row">
+          <span>Voxel Downsampling</span>
+          <span id="voxel-filter-val">Off (100%)</span>
+        </div>
+        <select id="select-voxel-filter">
+          <option value="0">Off (Full 100% Cloud)</option>
+          <option value="0.5">0.5m Voxel Grid</option>
+          <option value="1.0">1.0m Voxel Grid</option>
+          <option value="2.0">2.0m Voxel Grid</option>
+          <option value="5.0">5.0m Voxel Grid</option>
+          <option value="10.0">10.0m Voxel Grid</option>
+        </select>
+      </div>
+
+      <div class="control-group">
+        <div class="control-row">
+          <span>Decimation Density</span>
+          <span id="decimation-val">100%</span>
+        </div>
+        <input type="range" id="slider-decimation" min="5" max="100" step="5" value="100">
+      </div>
+
       <!-- Camera & Projection -->
       <div class="section-title">Camera & View</div>
       <div class="button-grid">

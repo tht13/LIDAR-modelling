@@ -30,6 +30,10 @@ export class UIManager {
   private pointSizeVal = document.getElementById("point-size-val")!;
   private sliderBg = document.getElementById("slider-bg") as HTMLInputElement;
   private bgBrightnessVal = document.getElementById("bg-brightness-val")!;
+  private selectVoxelFilter = document.getElementById("select-voxel-filter") as HTMLSelectElement;
+  private voxelFilterVal = document.getElementById("voxel-filter-val")!;
+  private sliderDecimation = document.getElementById("slider-decimation") as HTMLInputElement;
+  private decimationVal = document.getElementById("decimation-val")!;
   private selectColormap = document.getElementById("select-colormap") as HTMLSelectElement;
   private toggleGrid = document.getElementById("toggle-grid") as HTMLInputElement;
   private toggleOrtho = document.getElementById("toggle-ortho") as HTMLInputElement;
@@ -222,6 +226,39 @@ export class UIManager {
       const val = parseFloat(this.sliderBg.value);
       this.viewer.setBackgroundBrightness(val / 100);
       this.bgBrightnessVal.textContent = val < 25 ? `Dark (${Math.round(val)}%)` : val < 70 ? `Medium (${Math.round(val)}%)` : `Light (${Math.round(val)}%)`;
+    });
+
+    // Voxel Downsampling Filter
+    this.selectVoxelFilter?.addEventListener("change", () => {
+      const voxelSize = parseFloat(this.selectVoxelFilter.value);
+      if (this.viewer.pointCloud) {
+        // Reset decimation slider to 100% when choosing voxel filter
+        this.sliderDecimation.value = "100";
+        this.decimationVal.textContent = "100%";
+
+        const activeCount = this.viewer.pointCloud.applyVoxelGrid(voxelSize);
+        const total = this.viewer.pointCloud.data.count;
+        const pct = Math.round((activeCount / total) * 100);
+        this.voxelFilterVal.textContent = voxelSize > 0 ? `${voxelSize}m (${pct}%)` : "Off (100%)";
+        this.lblPoints.textContent = `${activeCount.toLocaleString()} / ${total.toLocaleString()} pts (${pct}%)`;
+      }
+    });
+
+    // Decimation Density Slider
+    this.sliderDecimation?.addEventListener("input", () => {
+      const pctVal = parseInt(this.sliderDecimation.value, 10);
+      const ratio = pctVal / 100;
+      this.decimationVal.textContent = `${pctVal}%`;
+      if (this.viewer.pointCloud) {
+        // Reset voxel select when using decimation slider
+        this.selectVoxelFilter.value = "0";
+        this.voxelFilterVal.textContent = "Off (100%)";
+
+        const activeCount = this.viewer.pointCloud.applyDecimation(ratio);
+        const total = this.viewer.pointCloud.data.count;
+        const pct = Math.round((activeCount / total) * 100);
+        this.lblPoints.textContent = `${activeCount.toLocaleString()} / ${total.toLocaleString()} pts (${pct}%)`;
+      }
     });
 
     // Reference grid toggle
