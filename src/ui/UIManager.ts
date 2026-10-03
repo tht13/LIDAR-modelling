@@ -3,6 +3,7 @@ import { ToolManager } from "../tools/ToolManager";
 import { ColorMode, ToolMode, MeasureResult, InspectedPoint } from "../types";
 import { FileService } from "../services/FileService";
 import { ProfileData } from "../tools/ProfileTool";
+import { ExportService } from "../services/ExportService";
 
 export class UIManager {
   private viewer: Viewer;
@@ -285,6 +286,21 @@ export class UIManager {
 
     // Snapshot button
     this.btnSnapshot.addEventListener("click", () => this.viewer.exportSnapshot());
+
+    // Export buttons
+    document.getElementById("btn-export-ply")?.addEventListener("click", () => {
+      if (!this.viewer.pointCloud) return;
+      const baseName = (this.lblFile.textContent || "pointcloud").replace(/\.[^/.]+$/, "");
+      const blob = ExportService.exportToPLY(this.viewer.pointCloud, true);
+      ExportService.saveBlob(blob, `${baseName}-export.ply`);
+    });
+
+    document.getElementById("btn-export-xyz")?.addEventListener("click", () => {
+      if (!this.viewer.pointCloud) return;
+      const baseName = (this.lblFile.textContent || "pointcloud").replace(/\.[^/.]+$/, "");
+      const blob = ExportService.exportToXYZ(this.viewer.pointCloud, true);
+      ExportService.saveBlob(blob, `${baseName}-export.xyz`);
+    });
 
     // Clear measurement button
     this.btnClearMeasure.addEventListener("click", () => this.toolManager.measurementTool.resetToIdle());
