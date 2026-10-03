@@ -10,8 +10,10 @@ export class PointCloud {
   public readonly data: ParseResult;
   private currentVoxelSize: number = 0;
   private currentDecimation: number = 1.0;
+  private enabledClassifications: Set<number> = new Set();
+  private hasClassificationData: boolean = false;
 
-  constructor(data: ParseResult, initialPointSize: number = 3.0, isOrtho: boolean = false) {
+  constructor(data: ParseResult, initialPointSize: number = 3.0, isOrtho: boolean = false, initialShape: number = 0) {
     this.data = data;
 
     this.geometry = new THREE.BufferGeometry();
@@ -19,6 +21,13 @@ export class PointCloud {
     this.geometry.setAttribute("customColor", new THREE.BufferAttribute(data.colors, 3));
     this.geometry.setAttribute("elevation", new THREE.BufferAttribute(data.elevations, 1));
     this.geometry.computeBoundingSphere();
+
+    if (data.classifications && data.classifications.length === data.count) {
+      this.hasClassificationData = true;
+      for (let i = 0; i < data.classifications.length; i++) {
+        this.enabledClassifications.add(data.classifications[i]);
+      }
+    }
 
     const initialColorMode = data.hasRGB ? ColorMode.RGB : ColorMode.Turbo;
 
@@ -28,6 +37,7 @@ export class PointCloud {
       uniforms: {
         pointSize: { value: initialPointSize },
         colorMode: { value: initialColorMode },
+        pointShape: { value: initialShape },
         isOrtho: { value: isOrtho }
       },
       transparent: true,
@@ -41,6 +51,10 @@ export class PointCloud {
     this.material.uniforms.pointSize.value = size;
   }
 
+  public setPointShape(shape: number): void {
+    this.material.uniforms.pointShape.value = shape;
+  }
+
   public setColorMode(mode: ColorMode): void {
     this.material.uniforms.colorMode.value = mode;
   }
@@ -49,35 +63,84 @@ export class PointCloud {
     this.material.uniforms.isOrtho.value = isOrtho;
   }
 
+  public hasClassifications(): boolean {
+    return this.hasClassificationData;
+  }
+
+  public getAvailableClassifications(): number[] {
+    if (!this.hasClassificationData || !this.data.classifications) return [];
+    const set = new Set<number>();
+    for (let i = 0; i < this.data.classifications.length; i++) {
+      set.add(this.data.classifications[i]);
+    }
+    return Array.from(set).sort((a, b) => a - b);
+  }
+
+  public setClassificationFilter(enabledClasses: Set<number>): number {
+    this.enabledClassifications = new Set(enabledClasses);
+    return this.rebuildIndices();
+  }
+
+  public isClassificationEnabled(classVal: number): boolean {
+    return this.enabledClassifications.has(classVal);
+  }
+
   /**
-   * Subsamples point cloud using a 3D uniform spatial voxel grid filter.
-   * If voxelSize <= 0, resets to full point cloud.
-   * Returns the count of active points.
+   * Rebuilds geometry index buffer by combining classification filters, voxel downsampling, and decimation.
    */
-  public applyVoxelGrid(voxelSize: number): number {
-    this.currentVoxelSize = voxelSize;
-    if (voxelSize <= 0) {
+  public rebuildIndices(): number {
+    const count = this.data.count;
+    const pos = this.data.positions;
+    const classes = this.data.classifications;
+
+    const useClassFilter = this.hasClassificationData && classes && this.enabledClassifications.size > 0;
+    const useVoxel = this.currentVoxelSize > 0;
+    const useDecimation = this.currentDecimation < 0.999;
+
+    // If no filters active, restore full dataset without index
+    if (!useClassFilter && !useVoxel && !useDecimation) {
       this.geometry.setIndex(null);
-      return this.data.count;
+      return count;
     }
 
-    const pos = this.data.positions;
-    const count = this.data.count;
-    const invSize = 1.0 / voxelSize;
-    const gridMap = new Set<string>();
+    const invSize = useVoxel ? 1.0 / this.currentVoxelSize : 0;
+    const voxelMap = useVoxel ? new Set<string>() : null;
+    const decimationStep = useDecimation ? 1.0 / Math.max(0.01, this.currentDecimation) : 1.0;
+    let nextDecimationPoint = 0;
+
     const indices: number[] = [];
 
     for (let i = 0; i < count; i++) {
-      const idx = i * 3;
-      const gx = Math.floor(pos[idx] * invSize);
-      const gy = Math.floor(pos[idx + 1] * invSize);
-      const gz = Math.floor(pos[idx + 2] * invSize);
-      const key = `${gx}_${gy}_${gz}`;
-
-      if (!gridMap.has(key)) {
-        gridMap.add(key);
-        indices.push(i);
+      // 1. Classification check
+      if (useClassFilter && classes) {
+        const c = classes[i];
+        if (!this.enabledClassifications.has(c)) {
+          continue;
+        }
       }
+
+      // 2. Decimation check
+      if (useDecimation) {
+        if (i < Math.floor(nextDecimationPoint)) {
+          continue;
+        }
+        nextDecimationPoint += decimationStep;
+      }
+
+      // 3. Voxel grid check
+      if (useVoxel && voxelMap) {
+        const idx = i * 3;
+        const gx = Math.floor(pos[idx] * invSize);
+        const gy = Math.floor(pos[idx + 1] * invSize);
+        const gz = Math.floor(pos[idx + 2] * invSize);
+        const key = `${gx}_${gy}_${gz}`;
+        if (voxelMap.has(key)) {
+          continue;
+        }
+        voxelMap.add(key);
+      }
+
+      indices.push(i);
     }
 
     const indexAttr = new THREE.BufferAttribute(new Uint32Array(indices), 1);
@@ -86,26 +149,21 @@ export class PointCloud {
   }
 
   /**
+   * Subsamples point cloud using a 3D uniform spatial voxel grid filter.
+   * If voxelSize <= 0, resets to full point cloud (subject to other filters).
+   * Returns the count of active points.
+   */
+  public applyVoxelGrid(voxelSize: number): number {
+    this.currentVoxelSize = Math.max(0, voxelSize);
+    return this.rebuildIndices();
+  }
+
+  /**
    * Decimates point cloud by taking a fraction of total points (0.01 to 1.0)
    */
   public applyDecimation(ratio: number): number {
-    this.currentDecimation = ratio;
-    const clamped = Math.max(0.01, Math.min(1.0, ratio));
-    if (clamped >= 0.999) {
-      this.geometry.setIndex(null);
-      return this.data.count;
-    }
-
-    const step = 1.0 / clamped;
-    const count = this.data.count;
-    const indices: number[] = [];
-    for (let i = 0; i < count; i += step) {
-      indices.push(Math.floor(i));
-    }
-
-    const indexAttr = new THREE.BufferAttribute(new Uint32Array(indices), 1);
-    this.geometry.setIndex(indexAttr);
-    return indices.length;
+    this.currentDecimation = Math.max(0.01, Math.min(1.0, ratio));
+    return this.rebuildIndices();
   }
 
   public getActivePointCount(): number {

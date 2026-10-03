@@ -85,6 +85,11 @@ export class UIManager {
 
     this.bindEvents();
     this.bindToolCallbacks();
+
+    // Auto-minimize on mobile viewports so 3D scene and menu button are visible
+    if (typeof window !== "undefined" && typeof window.innerWidth === "number" && window.innerWidth <= 600) {
+      this.minimizeMenu();
+    }
   }
 
   public getImportBudget(): number {
@@ -95,13 +100,17 @@ export class UIManager {
     return this.renderSettingsPanel.getPointSize();
   }
 
+  public getPointShape(): number {
+    return this.renderSettingsPanel.getPointShape();
+  }
+
   public isOrthoChecked(): boolean {
     return this.renderSettingsPanel.isOrthoChecked();
   }
 
   public minimizeMenu(): void {
     if (this.uiPanel) this.uiPanel.classList.add("minimized");
-    if (this.btnFloatingMenu) this.btnFloatingMenu.style.display = "flex";
+    if (this.btnFloatingMenu) this.btnFloatingMenu.style.display = "inline-flex";
     this.quickToolbar.show();
   }
 

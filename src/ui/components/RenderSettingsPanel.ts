@@ -15,6 +15,7 @@ export class RenderSettingsPanel {
   private edlStrengthGroup: HTMLElement | null;
 
   private selectColormap: HTMLSelectElement | null;
+  private selectPointShape: HTMLSelectElement | null;
   private sliderSize: HTMLInputElement | null;
   private pointSizeVal: HTMLElement | null;
   private sliderBg: HTMLInputElement | null;
@@ -24,6 +25,9 @@ export class RenderSettingsPanel {
   private voxelFilterVal: HTMLElement | null;
   private sliderDecimation: HTMLInputElement | null;
   private decimationVal: HTMLElement | null;
+
+  private classificationSection: HTMLElement | null;
+  private classificationList: HTMLElement | null;
 
   private toggleGrid: HTMLInputElement | null;
   private toggleOrtho: HTMLInputElement | null;
@@ -56,6 +60,7 @@ export class RenderSettingsPanel {
     this.edlStrengthGroup = find<HTMLElement>("#edl-strength-group");
 
     this.selectColormap = find<HTMLSelectElement>("#select-colormap");
+    this.selectPointShape = find<HTMLSelectElement>("#select-point-shape");
     this.sliderSize = find<HTMLInputElement>("#slider-size");
     this.pointSizeVal = find<HTMLElement>("#point-size-val");
     this.sliderBg = find<HTMLInputElement>("#slider-bg");
@@ -65,6 +70,9 @@ export class RenderSettingsPanel {
     this.voxelFilterVal = find<HTMLElement>("#voxel-filter-val");
     this.sliderDecimation = find<HTMLInputElement>("#slider-decimation");
     this.decimationVal = find<HTMLElement>("#decimation-val");
+
+    this.classificationSection = find<HTMLElement>("#classification-section");
+    this.classificationList = find<HTMLElement>("#classification-list");
 
     this.toggleGrid = find<HTMLInputElement>("#toggle-grid");
     this.toggleOrtho = find<HTMLInputElement>("#toggle-ortho");
@@ -82,6 +90,10 @@ export class RenderSettingsPanel {
 
   public getPointSize(): number {
     return this.sliderSize ? parseFloat(this.sliderSize.value) || 3.0 : 3.0;
+  }
+
+  public getPointShape(): number {
+    return this.selectPointShape ? parseInt(this.selectPointShape.value, 10) || 0 : 0;
   }
 
   public isOrthoChecked(): boolean {
@@ -147,6 +159,12 @@ export class RenderSettingsPanel {
       }
     });
 
+    this.selectPointShape?.addEventListener("change", () => {
+      if (!this.selectPointShape) return;
+      const shape = parseInt(this.selectPointShape.value, 10);
+      this.viewer.setPointShape(shape);
+    });
+
     this.sliderSize?.addEventListener("input", () => {
       if (!this.sliderSize) return;
       const size = parseFloat(this.sliderSize.value);
@@ -156,6 +174,10 @@ export class RenderSettingsPanel {
       if (this.viewer.pointCloud) {
         this.viewer.pointCloud.setPointSize(size);
       }
+    });
+
+    AppEvents.on("ui:cloud-loaded", () => {
+      this.updateClassificationsUI();
     });
 
     this.sliderBg?.addEventListener("input", () => {
@@ -257,13 +279,84 @@ export class RenderSettingsPanel {
     });
   }
 
+  private updateClassificationsUI(): void {
+    if (!this.classificationSection || !this.classificationList) return;
+    const pc = this.viewer.pointCloud;
+    if (!pc || !pc.hasClassifications()) {
+      this.classificationSection.style.display = "none";
+      return;
+    }
+
+    const available = pc.getAvailableClassifications();
+    if (available.length === 0) {
+      this.classificationSection.style.display = "none";
+      return;
+    }
+
+    this.classificationSection.style.display = "block";
+    this.classificationList.innerHTML = "";
+
+    const classNames: Record<number, string> = {
+      0: "0: Created / Never Classified",
+      1: "1: Unclassified",
+      2: "2: Ground Terrain",
+      3: "3: Low Vegetation",
+      4: "4: Medium Vegetation",
+      5: "5: High Vegetation (Canopy)",
+      6: "6: Buildings / Structures",
+      7: "7: Low Point (Noise)",
+      9: "9: Water",
+      12: "12: Overlap Points"
+    };
+
+    available.forEach(c => {
+      const row = document.createElement("div");
+      row.className = "control-row";
+      row.style.fontSize = "12px";
+      row.style.margin = "4px 0";
+
+      const label = document.createElement("span");
+      label.textContent = classNames[c] || `Class ${c}`;
+
+      const switchLabel = document.createElement("label");
+      switchLabel.className = "switch";
+
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = pc.isClassificationEnabled(c);
+
+      const sliderSpan = document.createElement("span");
+      sliderSpan.className = "slider-toggle";
+
+      switchLabel.appendChild(checkbox);
+      switchLabel.appendChild(sliderSpan);
+      row.appendChild(label);
+      row.appendChild(switchLabel);
+      this.classificationList!.appendChild(row);
+
+      checkbox.addEventListener("change", () => {
+        const currentClasses = new Set<number>();
+        const inputs = this.classificationList!.querySelectorAll("input[type=checkbox]");
+        inputs.forEach((inp, idx) => {
+          if ((inp as HTMLInputElement).checked) {
+            currentClasses.add(available[idx]);
+          }
+        });
+        const activeCount = pc.setClassificationFilter(currentClasses);
+        const total = pc.data.count;
+        const pct = Math.round((activeCount / total) * 100);
+        AppEvents.emit("ui:filter-change", activeCount, total, pct);
+      });
+    });
+  }
+
   public static template(): string {
     return `
       <div id="render-settings-panel" class="render-settings-group">
         <!-- Eye-Dome Lighting (EDL) -->
         <div class="section-title">Shading &amp; Effects</div>
         <div class="control-row">
-          <span>Eye-Dome Lighting (EDL)</span>
+          <span>Eye-Dome Lighting (EDL + AO)</span>
           <label class="switch">
             <input type="checkbox" id="toggle-edl" checked>
             <span class="slider-toggle"></span>
@@ -290,6 +383,17 @@ export class RenderSettingsPanel {
             <option value="3">Elevation: Plasma</option>
             <option value="4">Elevation: Rainbow</option>
             <option value="5">Intensity / Grayscale</option>
+          </select>
+        </div>
+
+        <!-- Point Shape / Splatting -->
+        <div class="control-group">
+          <div class="control-row">
+            <span>Point Geometry (Splatting)</span>
+          </div>
+          <select id="select-point-shape">
+            <option value="0" selected>Circular Disks (Surfels)</option>
+            <option value="1">Square Pixels</option>
           </select>
         </div>
 
@@ -346,6 +450,12 @@ export class RenderSettingsPanel {
             <span id="decimation-val">100%</span>
           </div>
           <input type="range" id="slider-decimation" min="5" max="100" step="5" value="100">
+        </div>
+
+        <!-- LAS Point Classification Filtering -->
+        <div id="classification-section" style="display: none;">
+          <div class="section-title">Point Classifications (ASPRS)</div>
+          <div id="classification-list" class="control-group"></div>
         </div>
 
         <!-- Camera & Projection -->

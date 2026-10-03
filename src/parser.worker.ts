@@ -72,12 +72,17 @@ ctx.onmessage = async (event: MessageEvent<any>) => {
   postProgress(100, "Rendering point cloud...");
 
   // Transfer ArrayBuffers with zero-copy transfer
+  const transferables: Transferable[] = [result.positions.buffer, result.colors.buffer, result.elevations.buffer];
+  if (result.classifications) {
+    transferables.push(result.classifications.buffer);
+  }
+
   ctx.postMessage(
     {
       type: "done",
       success: true,
       data: result
     },
-    [result.positions.buffer, result.colors.buffer, result.elevations.buffer]
+    transferables
   );
 };

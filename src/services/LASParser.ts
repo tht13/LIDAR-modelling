@@ -183,6 +183,7 @@ export class LASParser {
     const positions = new Float32Array(targetCount * 3);
     const colors = new Float32Array(targetCount * 3);
     const elevations = new Float32Array(targetCount);
+    const classifications = new Uint8Array(targetCount);
 
     const colorDivisor = hasRGB ? this.probeColorDivisor(view, offsetToPoints, pointRecordLength, rgbOffset, pointCount, buffer.byteLength) : 1.0;
 
@@ -203,6 +204,13 @@ export class LASParser {
 
       elevations[outIndex] = GeoCoordinates.normalizeElevation(pz, minZ, zSpan);
 
+      // Classification byte (LAS formats 0-5 byte 15, formats 6-10 byte 16)
+      if (header.pointFormat <= 5 && pOffset + 16 <= buffer.byteLength) {
+        classifications[outIndex] = view.getUint8(pOffset + 15) & 0x1f; // Bits 0-4 are ASPRS classification
+      } else if (header.pointFormat >= 6 && pOffset + 17 <= buffer.byteLength) {
+        classifications[outIndex] = view.getUint8(pOffset + 16);
+      }
+
       if (hasRGB && rgbOffset > 0 && pOffset + rgbOffset + 6 <= buffer.byteLength) {
         colors[outIndex * 3] = view.getUint16(pOffset + rgbOffset, true) / colorDivisor;
         colors[outIndex * 3 + 1] = view.getUint16(pOffset + rgbOffset + 2, true) / colorDivisor;
@@ -220,6 +228,7 @@ export class LASParser {
       positions: outIndex === targetCount ? positions : positions.subarray(0, outIndex * 3),
       colors: outIndex === targetCount ? colors : colors.subarray(0, outIndex * 3),
       elevations: outIndex === targetCount ? elevations : elevations.subarray(0, outIndex),
+      classifications: outIndex === targetCount ? classifications : classifications.subarray(0, outIndex),
       count: outIndex,
       totalPoints: pointCount,
       subsampled: stride > 1,
@@ -282,6 +291,7 @@ export class LASParser {
     const positions = new Float32Array(targetCount * 3);
     const colors = new Float32Array(targetCount * 3);
     const elevations = new Float32Array(targetCount);
+    const classifications = new Uint8Array(targetCount);
 
     // Probe color bit depth
     let colorDivisor = 1.0;
@@ -324,6 +334,12 @@ export class LASParser {
 
         elevations[outIndex] = GeoCoordinates.normalizeElevation(pz, minZ, zSpan);
 
+        if (header.pointFormat <= 5 && pOffset + 16 <= chunkBuffer.byteLength) {
+          classifications[outIndex] = chunkView.getUint8(pOffset + 15) & 0x1f;
+        } else if (header.pointFormat >= 6 && pOffset + 17 <= chunkBuffer.byteLength) {
+          classifications[outIndex] = chunkView.getUint8(pOffset + 16);
+        }
+
         if (hasRGB && rgbOffset > 0 && pOffset + rgbOffset + 6 <= chunkBuffer.byteLength) {
           colors[outIndex * 3] = chunkView.getUint16(pOffset + rgbOffset, true) / colorDivisor;
           colors[outIndex * 3 + 1] = chunkView.getUint16(pOffset + rgbOffset + 2, true) / colorDivisor;
@@ -348,6 +364,7 @@ export class LASParser {
       positions: outIndex === targetCount ? positions : positions.subarray(0, outIndex * 3),
       colors: outIndex === targetCount ? colors : colors.subarray(0, outIndex * 3),
       elevations: outIndex === targetCount ? elevations : elevations.subarray(0, outIndex),
+      classifications: outIndex === targetCount ? classifications : classifications.subarray(0, outIndex),
       count: outIndex,
       totalPoints: pointCount,
       subsampled: stride > 1,
@@ -410,6 +427,11 @@ export class LASParser {
         view.setInt32(offset + 4, Math.round(worldY / scale), true);
         view.setInt32(offset + 8, Math.round(worldZ / scale), true);
         view.setUint16(offset + 12, 1000, true); // intensity
+
+        // Classification byte (byte 15 in format 2)
+        // 2: Ground, 5: High Vegetation, 6: Building
+        const classVal = (dist < 15 && Math.abs(worldX) < 10) ? 6 : (worldZ > 12 ? 5 : 2);
+        view.setUint8(offset + 15, classVal);
 
         // 16-bit RGB (Format 2)
         const rNorm = 0.2 + 0.6 * ((worldZ + 30) / 60);

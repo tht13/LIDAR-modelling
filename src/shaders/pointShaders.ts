@@ -16,13 +16,14 @@ export const pointVertexShader = `
     } else {
       gl_PointSize = pointSize * (350.0 / -mvPosition.z);
     }
-    gl_PointSize = clamp(gl_PointSize, 1.0, 80.0);
+    gl_PointSize = clamp(gl_PointSize, 1.0, 100.0);
     gl_Position = projectionMatrix * mvPosition;
   }
 `;
 
 export const pointFragmentShader = `
   uniform int colorMode; // 0: RGB, 1: Turbo, 2: Viridis, 3: Plasma, 4: Rainbow, 5: Grayscale
+  uniform int pointShape; // 0: Circle (surfel splat), 1: Square
   varying vec3 vColor;
   varying float vElevation;
 
@@ -75,10 +76,13 @@ export const pointFragmentShader = `
   }
 
   void main() {
-    vec2 coord = gl_PointCoord - vec2(0.5);
-    float dist = length(coord);
-    if (dist > 0.5) discard;
-    float alpha = smoothstep(0.5, 0.42, dist);
+    float alpha = 1.0;
+    if (pointShape == 0) {
+      vec2 coord = gl_PointCoord - vec2(0.5);
+      float dist = length(coord);
+      if (dist > 0.5) discard;
+      alpha = smoothstep(0.5, 0.40, dist);
+    }
 
     vec3 outColor = vColor;
     if (colorMode == 1) {

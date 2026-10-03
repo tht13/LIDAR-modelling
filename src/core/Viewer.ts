@@ -94,6 +94,12 @@ export class Viewer {
     this.edlPass.setStrength(strength);
   }
 
+  public setPointShape(shape: number): void {
+    if (this.pointCloud) {
+      this.pointCloud.setPointShape(shape);
+    }
+  }
+
   public setOrthoMode(useOrtho: boolean): void {
     this.cameraManager.setOrthoMode(useOrtho, this.pointCloud);
   }

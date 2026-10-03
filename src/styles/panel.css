@@ -272,4 +272,10 @@ input:checked + .slider-toggle:before {
     padding: 14px;
     border-radius: 12px;
   }
+
+  #btn-floating-menu {
+    top: 10px;
+    left: 10px;
+  }
 }
+

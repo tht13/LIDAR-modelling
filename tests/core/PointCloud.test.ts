@@ -145,6 +145,40 @@ describe("PointCloud", () => {
     expect(filteredIterated).toBe(5);
   });
 
+  it("supports pointShape splatting uniform configuration", () => {
+    const data = createMockParseResult(10);
+    const pc = new PointCloud(data, 3.0, false, 0);
+    expect(pc.material.uniforms.pointShape.value).toBe(0);
+
+    pc.setPointShape(1);
+    expect(pc.material.uniforms.pointShape.value).toBe(1);
+  });
+
+  describe("classification filtering", () => {
+    it("filters points by ASPRS classification", () => {
+      const data = createMockParseResult(30);
+      const classes = new Uint8Array(30);
+      for (let i = 0; i < 30; i++) {
+        classes[i] = i < 10 ? 2 : (i < 20 ? 5 : 6); // 10 Ground, 10 Veg, 10 Building
+      }
+      data.classifications = classes;
+
+      const pc = new PointCloud(data);
+      expect(pc.hasClassifications()).toBe(true);
+      expect(pc.getAvailableClassifications()).toEqual([2, 5, 6]);
+
+      // Filter only Ground (class 2)
+      const groundCount = pc.setClassificationFilter(new Set([2]));
+      expect(groundCount).toBe(10);
+      expect(pc.getActivePointCount()).toBe(10);
+
+      // Filter Ground and Building (class 2 and 6)
+      const twoClassesCount = pc.setClassificationFilter(new Set([2, 6]));
+      expect(twoClassesCount).toBe(20);
+      expect(pc.getActivePointCount()).toBe(20);
+    });
+  });
+
   it("disposes geometry and material cleanly", () => {
     const data = createMockParseResult(10);
     const pc = new PointCloud(data);

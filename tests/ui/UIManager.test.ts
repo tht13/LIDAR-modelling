@@ -191,4 +191,45 @@ describe("UIManager Dataset Hierarchy & Imported Dataset Reversion", () => {
     expect(window.prompt).toHaveBeenCalled();
     expect(callback).toHaveBeenCalledWith("action:load-dataset", "url:https://example.com/pointcloud.las");
   });
+
+  it("toggles menu visibility between minimized and expanded states", () => {
+    const btnFloatingMenu = document.getElementById("btn-floating-menu") as HTMLButtonElement;
+    const uiPanel = document.getElementById("ui-panel")!;
+
+    uiManager.minimizeMenu();
+    expect(uiPanel.classList.contains("minimized")).toBe(true);
+    expect(btnFloatingMenu.style.display).toBe("inline-flex");
+    expect(uiManager.quickToolbar.element.style.display).toBe("flex");
+
+    uiManager.expandMenu();
+    expect(uiPanel.classList.contains("minimized")).toBe(false);
+    expect(btnFloatingMenu.style.display).toBe("none");
+    expect(uiManager.quickToolbar.element.style.display).toBe("none");
+  });
+
+  it("auto-minimizes menu on mobile screen width (<= 600px) so menu button is visible", () => {
+    const origWidth = window.innerWidth;
+    try {
+      Object.defineProperty(window, "innerWidth", { value: 390, writable: true, configurable: true });
+
+      document.body.innerHTML = `
+        <div id="ui-panel">
+          <button id="btn-floating-menu"></button>
+          <button id="btn-minimize-menu"></button>
+          <select id="select-dataset"></select>
+          <button id="tool-orbit"></button>
+        </div>
+      `;
+
+      const mobileUIManager = new UIManager(mockViewer, mockToolManager);
+      const uiPanel = document.getElementById("ui-panel")!;
+      const btnFloating = document.getElementById("btn-floating-menu") as HTMLButtonElement;
+
+      expect(uiPanel.classList.contains("minimized")).toBe(true);
+      expect(btnFloating.style.display).toBe("inline-flex");
+      expect(mobileUIManager.quickToolbar.element.style.display).toBe("flex");
+    } finally {
+      Object.defineProperty(window, "innerWidth", { value: origWidth, writable: true, configurable: true });
+    }
+  });
 });

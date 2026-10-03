@@ -82,18 +82,28 @@ export class EDLPass {
         offsets[6] = vec2( 0.707, -0.707);
         offsets[7] = vec2(-0.707,  0.707);
 
-        float response = 0.0;
+        float edlResponse = 0.0;
+        float aoResponse = 0.0;
         for (int i = 0; i < 8; i++) {
           vec2 sampleCoord = vUv + offsets[i] * texel;
           float dSample = readLinearDepth(sampleCoord);
           float logDSample = log2(max(0.1, dSample));
-          response += max(0.0, logD0 - logDSample);
+          
+          // Silhouette edge term (EDL dome)
+          edlResponse += max(0.0, logD0 - logDSample);
+          
+          // Ambient occlusion term (crevices / neighboring surfaces closer than foreground)
+          float diff = d0 - dSample;
+          if (diff > 0.02 && diff < d0 * 0.15) {
+            aoResponse += smoothstep(0.02, d0 * 0.1, diff);
+          }
         }
 
-        float edlFactor = exp(-response * uEDLStrength * 40.0);
-        edlFactor = clamp(edlFactor, 0.2, 1.0);
+        float edlFactor = exp(-edlResponse * uEDLStrength * 40.0);
+        float aoFactor = 1.0 - clamp(aoResponse * 0.08 * uEDLStrength, 0.0, 0.45);
+        float totalFactor = clamp(edlFactor * aoFactor, 0.15, 1.0);
 
-        gl_FragColor = vec4(color.rgb * edlFactor, color.a);
+        gl_FragColor = vec4(color.rgb * totalFactor, color.a);
       }
     `;
 

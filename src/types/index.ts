@@ -11,6 +11,7 @@ export interface ParseResult {
   center: [number, number, number];
   size: [number, number, number];
   hasRGB: boolean;
+  classifications?: Uint8Array;
 }
 
 export type ToolMode = "orbit" | "measure" | "profile" | "inspect" | "fly";

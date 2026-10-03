@@ -7,6 +7,7 @@ import { SampleDatasets } from "./services/SampleDatasets";
 import { ParseResult, ColorMode } from "./types";
 import { ParserWorkerClient } from "./services/ParserWorkerClient";
 import { AppEvents } from "./core/AppEvents";
+import { DatasetCacheService } from "./services/DatasetCacheService";
 
 class App {
   private viewer: Viewer;
@@ -14,6 +15,7 @@ class App {
   private uiManager: UIManager;
   private workerClient: ParserWorkerClient;
   private currentFileName: string = "points.txt";
+  private currentDatasetId: string = "mountain-lidar";
   private maxImportPoints: number = 5_000_000;
   private importedDatasets: Map<string, { id: string; name: string; displayName: string; data?: string | ArrayBuffer | File; url?: string }> = new Map();
 
@@ -65,9 +67,20 @@ class App {
   }
 
   public async loadDatasetById(datasetId: string): Promise<void> {
+    this.currentDatasetId = datasetId;
     if (datasetId.startsWith("url:")) {
       const url = datasetId.substring(4);
       await this.loadFromUrl(url);
+      return;
+    }
+
+    // Check IndexedDB cache first
+    const cached = await DatasetCacheService.getDataset(datasetId);
+    if (cached) {
+      AppEvents.emit("ui:dataset-changed", datasetId);
+      window.location.hash = `dataset=${encodeURIComponent(datasetId)}`;
+      this.currentFileName = datasetId;
+      this.handleParseSuccess(cached);
       return;
     }
 
@@ -196,15 +209,15 @@ class App {
 
     const pointSize = this.uiManager.getPointSize();
     const isOrtho = this.uiManager.isOrthoChecked();
-    const pointCloud = new PointCloud(data, pointSize, isOrtho);
+    const pointShape = this.uiManager.getPointShape();
+    const pointCloud = new PointCloud(data, pointSize, isOrtho, pointShape);
 
     this.viewer.setPointCloud(pointCloud);
 
     // Auto-select colormap
     const defaultColorMode = data.hasRGB ? ColorMode.RGB : ColorMode.Turbo;
-    // We didn't add a setColormapValue app event, so we can just emit an action or call renderSettingsPanel directly. Wait, main.ts can use AppEvents or UIManager still has this method? Wait, I removed setColormapValue from UIManager.
-    // Let's add AppEvents.emit("ui:colormap-changed", defaultColorMode);
     AppEvents.emit("ui:colormap-changed", defaultColorMode);
+    AppEvents.emit("ui:cloud-loaded");
 
     const boundsText = `Extents: ${data.size[0].toFixed(1)}m × ${data.size[2].toFixed(1)}m | Elev: ${data.size[1].toFixed(1)}m`;
     let countSummary = `${data.count.toLocaleString()} points`;
@@ -219,6 +232,11 @@ class App {
       countSummary,
       boundsText
     );
+
+    // Save to IndexedDB cache in background if within size limit (e.g. <= 50MB)
+    if (this.currentDatasetId) {
+      DatasetCacheService.saveDataset(this.currentDatasetId, this.currentFileName, data).catch(() => {});
+    }
   }
 }
 
