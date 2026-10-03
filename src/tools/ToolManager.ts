@@ -3,10 +3,12 @@ import { Viewer } from "../core/Viewer";
 import { ToolMode } from "../types";
 import { MeasurementTool } from "./MeasurementTool";
 import { InspectorTool } from "./InspectorTool";
+import { ProfileTool } from "./ProfileTool";
 
 export class ToolManager {
   public readonly measurementTool: MeasurementTool;
   public readonly inspectorTool: InspectorTool;
+  public readonly profileTool: ProfileTool;
   private viewer: Viewer;
   private activeMode: ToolMode = "orbit";
   private raycaster: THREE.Raycaster;
@@ -19,6 +21,7 @@ export class ToolManager {
 
     this.measurementTool = new MeasurementTool(viewer);
     this.inspectorTool = new InspectorTool(viewer);
+    this.profileTool = new ProfileTool(viewer);
 
     this.setupListeners();
   }
@@ -29,18 +32,27 @@ export class ToolManager {
 
     if (mode === "measure") {
       dom.style.cursor = "crosshair";
-      this.viewer.controls.enabled = false; // Disable orbit controls in measure mode
+      this.viewer.controls.enabled = false;
       this.inspectorTool.clear();
+      this.profileTool.clear();
       this.measurementTool.resetToIdle();
+    } else if (mode === "profile") {
+      dom.style.cursor = "crosshair";
+      this.viewer.controls.enabled = false;
+      this.inspectorTool.clear();
+      this.measurementTool.clear();
+      this.profileTool.resetToIdle();
     } else if (mode === "inspect") {
       dom.style.cursor = "crosshair";
       this.viewer.controls.enabled = true;
       this.measurementTool.clear();
+      this.profileTool.clear();
     } else {
       dom.style.cursor = "default";
-      this.viewer.controls.enabled = true; // Re-enable orbit controls
+      this.viewer.controls.enabled = true;
       this.inspectorTool.clear();
       this.measurementTool.clear();
+      this.profileTool.clear();
     }
   }
 
@@ -62,6 +74,8 @@ export class ToolManager {
         this.inspectorTool.handlePointerMove(intersected, e.clientX, e.clientY);
       } else if (this.activeMode === "measure") {
         this.measurementTool.handlePointerMove(intersected);
+      } else if (this.activeMode === "profile") {
+        this.profileTool.handlePointerMove(intersected);
       }
     });
 
@@ -72,9 +86,13 @@ export class ToolManager {
     });
 
     dom.addEventListener("pointerdown", (e: PointerEvent) => {
-      if (this.activeMode === "measure" && e.button === 0) {
+      if (e.button === 0) {
         const intersected = this.getIntersectedPoint();
-        this.measurementTool.handleClick(intersected);
+        if (this.activeMode === "measure") {
+          this.measurementTool.handleClick(intersected);
+        } else if (this.activeMode === "profile") {
+          this.profileTool.handleClick(intersected);
+        }
       }
     });
   }
