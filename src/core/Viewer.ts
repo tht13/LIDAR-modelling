@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { PointCloud } from "./PointCloud";
+import { EDLPass } from "../shaders/EDLPass";
 import { CameraPreset } from "../types";
 
 export class Viewer {
@@ -11,6 +12,7 @@ export class Viewer {
   public activeCamera: THREE.Camera;
   public readonly controls: OrbitControls;
   public readonly gridHelper: THREE.GridHelper;
+  public readonly edlPass: EDLPass;
   public pointCloud: PointCloud | null = null;
   private isOrthoMode: boolean = false;
 
@@ -47,6 +49,9 @@ export class Viewer {
     this.gridHelper.position.y = -20;
     this.scene.add(this.gridHelper);
 
+    // Eye-Dome Lighting (EDL) Depth Pass
+    this.edlPass = new EDLPass(window.innerWidth, window.innerHeight);
+
     window.addEventListener("resize", () => this.handleResize());
     this.animate();
   }
@@ -72,6 +77,14 @@ export class Viewer {
 
   public setGridVisible(visible: boolean): void {
     this.gridHelper.visible = visible;
+  }
+
+  public setEDLEnabled(enabled: boolean): void {
+    this.edlPass.enabled = enabled;
+  }
+
+  public setEDLStrength(strength: number): void {
+    this.edlPass.setStrength(strength);
   }
 
   public setOrthoMode(useOrtho: boolean): void {
@@ -139,7 +152,7 @@ export class Viewer {
   }
 
   public exportSnapshot(): void {
-    this.renderer.render(this.scene, this.activeCamera);
+    this.edlPass.render(this.renderer, this.scene, this.activeCamera);
     const dataURL = this.renderer.domElement.toDataURL("image/png");
     const a = document.createElement("a");
     a.download = `lidar-snapshot-${Date.now()}.png`;
@@ -161,11 +174,12 @@ export class Viewer {
 
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.edlPass.setSize(window.innerWidth, window.innerHeight);
   }
 
   private animate = (): void => {
     requestAnimationFrame(this.animate);
     this.controls.update();
-    this.renderer.render(this.scene, this.activeCamera);
+    this.edlPass.render(this.renderer, this.scene, this.activeCamera);
   };
 }

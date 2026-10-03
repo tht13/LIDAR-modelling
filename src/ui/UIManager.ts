@@ -7,14 +7,24 @@ export class UIManager {
   private viewer: Viewer;
   private toolManager: ToolManager;
   private onFileOpenCallback: ((text: string, fileName: string) => void) | null = null;
+  private onDatasetSelectCallback: ((datasetId: string) => void) | null = null;
 
   // DOM Elements
   private uiPanel = document.getElementById("ui-panel")!;
   private btnFloatingMenu = document.getElementById("btn-floating-menu") as HTMLButtonElement;
   private btnMinimizeMenu = document.getElementById("btn-minimize-menu") as HTMLButtonElement;
+  private selectDataset = document.getElementById("select-dataset") as HTMLSelectElement;
+  private toggleEDL = document.getElementById("toggle-edl") as HTMLInputElement;
+  private sliderEDL = document.getElementById("slider-edl") as HTMLInputElement;
+  private edlStrengthVal = document.getElementById("edl-strength-val")!;
+  private edlStrengthGroup = document.getElementById("edl-strength-group")!;
+
   private lblFile = document.getElementById("lbl-file")!;
   private lblPoints = document.getElementById("lbl-points")!;
   private lblBounds = document.getElementById("lbl-bounds")!;
+  private progressContainer = document.getElementById("progress-container")!;
+  private progressBar = document.getElementById("progress-bar")!;
+
   private sliderSize = document.getElementById("slider-size") as HTMLInputElement;
   private pointSizeVal = document.getElementById("point-size-val")!;
   private sliderBg = document.getElementById("slider-bg") as HTMLInputElement;
@@ -51,14 +61,34 @@ export class UIManager {
     this.onFileOpenCallback = cb;
   }
 
+  public onDatasetSelect(cb: (datasetId: string) => void): void {
+    this.onDatasetSelectCallback = cb;
+  }
+
   public updateStatus(fileName: string, statusText: string, boundsText: string = ""): void {
     this.lblFile.textContent = fileName;
     this.lblPoints.textContent = statusText;
     this.lblBounds.textContent = boundsText;
   }
 
+  public setProgress(percent: number | null): void {
+    if (percent === null) {
+      this.progressContainer.style.display = "none";
+      this.progressBar.style.width = "0%";
+    } else {
+      this.progressContainer.style.display = "block";
+      this.progressBar.style.width = `${Math.min(100, Math.max(5, percent))}%`;
+    }
+  }
+
   public setColormapValue(mode: ColorMode): void {
     this.selectColormap.value = mode.toString();
+  }
+
+  public setDatasetValue(id: string): void {
+    if (this.selectDataset) {
+      this.selectDataset.value = id;
+    }
   }
 
   public getPointSize(): number {
@@ -92,7 +122,7 @@ export class UIManager {
     this.btnMinimizeMenu?.addEventListener("click", () => this.minimizeMenu());
     this.btnFloatingMenu?.addEventListener("click", () => this.expandMenu());
 
-    // Keyboard shortcut 'M' to toggle menu
+    // Keyboard shortcut 'M'
     window.addEventListener("keydown", (e: KeyboardEvent) => {
       if (e.key === "m" || e.key === "M") {
         const target = e.target as HTMLElement;
@@ -101,6 +131,35 @@ export class UIManager {
         }
         this.toggleMenu();
       }
+    });
+
+    // Sample Dataset Selector
+    this.selectDataset?.addEventListener("change", () => {
+      const selected = this.selectDataset.value;
+      if (selected === "custom-url") {
+        const url = prompt("Enter public URL of point cloud (.txt, .xyz, .csv, .pts):");
+        if (url && this.onDatasetSelectCallback) {
+          this.onDatasetSelectCallback(`url:${url}`);
+        } else {
+          this.selectDataset.value = "mountain-lidar";
+        }
+      } else if (this.onDatasetSelectCallback) {
+        this.onDatasetSelectCallback(selected);
+      }
+    });
+
+    // Eye-Dome Lighting (EDL) Toggle
+    this.toggleEDL?.addEventListener("change", () => {
+      const enabled = this.toggleEDL.checked;
+      this.viewer.setEDLEnabled(enabled);
+      this.edlStrengthGroup.style.display = enabled ? "flex" : "none";
+    });
+
+    // EDL Strength Slider
+    this.sliderEDL?.addEventListener("input", () => {
+      const val = parseFloat(this.sliderEDL.value);
+      this.edlStrengthVal.textContent = val.toFixed(1);
+      this.viewer.setEDLStrength(val);
     });
 
     // Tool Switching
@@ -179,7 +238,7 @@ export class UIManager {
       }
     });
 
-    // Drag and Drop (works universally in Electron and Browser WebApp)
+    // Drag and Drop
     window.addEventListener("dragover", (e) => { e.preventDefault(); this.dropOverlay.style.display = "flex"; });
     window.addEventListener("dragleave", (e) => { if (e.relatedTarget === null) this.dropOverlay.style.display = "none"; });
     window.addEventListener("drop", async (e) => {
