@@ -25,7 +25,7 @@
 /* Floating 2D Cross-Section Profile Panel */
 #profile-panel {
   position: absolute;
-  bottom: 16px;
+  bottom: 20px;
   left: 50%;
   transform: translateX(-50%);
   width: calc(100vw - 32px);
@@ -40,6 +40,14 @@
   flex-direction: column;
   gap: 8px;
   z-index: 30;
+  box-sizing: border-box;
+}
+
+@media (min-width: 900px) {
+  #ui-panel:not(.minimized) ~ #profile-panel {
+    left: calc(315px + (100vw - 315px) / 2);
+    max-width: min(640px, calc(100vw - 350px));
+  }
 }
 
 .profile-header {
@@ -50,11 +58,14 @@
 }
 
 #profile-canvas {
+  position: relative;
+  display: block;
   width: 100%;
   height: 130px;
   background: rgba(10, 11, 15, 0.8);
   border-radius: 6px;
   border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  box-sizing: border-box;
 }
 
 /* Hover Inspector Tooltip */
@@ -119,7 +130,7 @@
   pointer-events: none;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 768px) {
   #measure-box {
     bottom: 12px;
     width: calc(100vw - 24px);
@@ -132,9 +143,21 @@
   }
   #profile-panel {
     bottom: 10px;
-    padding: 10px;
+    padding: 8px 12px;
+    max-width: calc(100vw - 20px);
   }
   #profile-canvas {
     height: 100px;
+  }
+}
+
+@media (max-height: 600px) {
+  #profile-panel {
+    bottom: 8px;
+    padding: 6px 10px;
+    gap: 4px;
+  }
+  #profile-canvas {
+    height: 90px;
   }
 }

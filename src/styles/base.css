@@ -24,7 +24,7 @@ html, body {
   overflow: hidden;
 }
 
-canvas,
+#canvas-container canvas,
 .webgl-canvas {
   position: absolute;
   top: 0;

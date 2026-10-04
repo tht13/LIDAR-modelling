@@ -8,6 +8,8 @@ export class ProfileChart {
   private btnClose: HTMLButtonElement | null;
   private onCloseCallback: (() => void) | null = null;
 
+  private lastData: ProfileData | null = null;
+
   constructor() {
     let el = document.getElementById("profile-panel");
     if (!el) {
@@ -25,6 +27,14 @@ export class ProfileChart {
         this.onCloseCallback();
       }
     });
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("resize", () => {
+        if (this.lastData && this.element.style.display !== "none") {
+          this.render(this.lastData);
+        }
+      });
+    }
   }
 
   public onClose(cb: () => void): void {
@@ -36,18 +46,20 @@ export class ProfileChart {
   }
 
   public hide(): void {
+    this.lastData = null;
     this.element.style.display = "none";
   }
 
   public render(data: ProfileData): void {
     if (!this.canvas) return;
+    this.lastData = data;
     this.show();
 
     const canvas = this.canvas;
     const rect = canvas.getBoundingClientRect();
     const dpr = typeof window !== "undefined" && window.devicePixelRatio ? window.devicePixelRatio : 1;
-    const w = rect.width > 0 ? rect.width : 500;
-    const h = 130;
+    const w = rect.width > 0 ? rect.width : (canvas.clientWidth > 0 ? canvas.clientWidth : 500);
+    const h = rect.height > 0 ? rect.height : (canvas.clientHeight > 0 ? canvas.clientHeight : 130);
 
     canvas.width = w * dpr;
     canvas.height = h * dpr;
