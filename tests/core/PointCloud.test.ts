@@ -179,6 +179,86 @@ describe("PointCloud", () => {
     });
   });
 
+  describe("axis orientation (debug flips and swaps)", () => {
+    it("flips X, Y, and Z axes accurately", () => {
+      const data = createMockParseResult(5);
+      // original first point: (0, 0, 0), second point: (1, 0, 0.5)
+      const pc = new PointCloud(data);
+      const posAttr = pc.geometry.getAttribute("position");
+
+      expect(pc.getAxisOrientation()).toEqual({
+        flipX: false,
+        flipY: false,
+        flipZ: false,
+        swapXY: false,
+        swapXZ: false
+      });
+
+      // Flip X
+      pc.setAxisOrientation({ flipX: true });
+      expect(posAttr.getX(1)).toBe(-1.0);
+      expect(posAttr.getY(1)).toBe(0.0);
+      expect(posAttr.getZ(1)).toBe(0.5);
+
+      // Flip Z
+      pc.setAxisOrientation({ flipZ: true });
+      expect(posAttr.getX(1)).toBe(-1.0);
+      expect(posAttr.getZ(1)).toBe(-0.5);
+
+      // Flip Y and reset others
+      pc.setAxisOrientation({ flipX: false, flipY: true, flipZ: false });
+      expect(posAttr.getX(1)).toBe(1.0);
+      expect(posAttr.getY(1)).toBe(-0.0);
+      expect(posAttr.getZ(1)).toBe(0.5);
+    });
+
+    it("swaps X ↔ Y and X ↔ Z coordinates", () => {
+      const data = createMockParseResult(5);
+      // point 1: x = 1, y = 0, z = 0.5
+      const pc = new PointCloud(data);
+      const posAttr = pc.geometry.getAttribute("position");
+
+      // Swap XY
+      pc.setAxisOrientation({ swapXY: true });
+      expect(posAttr.getX(1)).toBe(0.0);
+      expect(posAttr.getY(1)).toBe(1.0);
+      expect(posAttr.getZ(1)).toBe(0.5);
+
+      // Swap XZ
+      pc.setAxisOrientation({ swapXY: false, swapXZ: true });
+      expect(posAttr.getX(1)).toBe(0.5);
+      expect(posAttr.getY(1)).toBe(0.0);
+      expect(posAttr.getZ(1)).toBe(1.0);
+    });
+
+    it("resets back to original coordinates cleanly", () => {
+      const data = createMockParseResult(5);
+      const pc = new PointCloud(data);
+      const posAttr = pc.geometry.getAttribute("position");
+
+      pc.setAxisOrientation({ flipX: true, flipY: true, flipZ: true, swapXY: true, swapXZ: true });
+      pc.setAxisOrientation({ flipX: false, flipY: false, flipZ: false, swapXY: false, swapXZ: false });
+
+      expect(posAttr.getX(1)).toBe(1.0);
+      expect(posAttr.getY(1)).toBe(0.0);
+      expect(posAttr.getZ(1)).toBe(0.5);
+    });
+
+    it("reflects active axis orientation in forEachActivePoint", () => {
+      const data = createMockParseResult(2);
+      const pc = new PointCloud(data);
+      pc.setAxisOrientation({ flipX: true });
+
+      const points: number[][] = [];
+      pc.forEachActivePoint((x, y, z) => {
+        points.push([x, y, z]);
+      });
+
+      // center was [5, 5, 25], point 1 had x=1 => flipped x = -1 => realX = -1 + 5 = 4
+      expect(points[1][0]).toBe(4);
+    });
+  });
+
   it("disposes geometry and material cleanly", () => {
     const data = createMockParseResult(10);
     const pc = new PointCloud(data);

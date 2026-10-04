@@ -1,5 +1,5 @@
 import { Viewer } from "../../core/Viewer";
-import { ColorMode, CameraPreset } from "../../types";
+import { ColorMode, CameraPreset, AxisOrientation } from "../../types";
 import { ExportService } from "../../services/ExportService";
 import { createElement } from "../utils/dom";
 import { AppEvents } from "../../core/AppEvents";
@@ -32,6 +32,13 @@ export class RenderSettingsPanel {
   private toggleGrid: HTMLInputElement | null;
   private toggleOrtho: HTMLInputElement | null;
   private btnSnapshot: HTMLButtonElement | null;
+
+  private toggleFlipX: HTMLInputElement | null;
+  private toggleFlipY: HTMLInputElement | null;
+  private toggleFlipZ: HTMLInputElement | null;
+  private toggleSwapXY: HTMLInputElement | null;
+  private toggleSwapXZ: HTMLInputElement | null;
+  private btnResetAxes: HTMLButtonElement | null;
 
   private selectImportBudget: HTMLSelectElement | null;
   private importBudgetVal: HTMLElement | null;
@@ -77,6 +84,13 @@ export class RenderSettingsPanel {
     this.toggleGrid = find<HTMLInputElement>("#toggle-grid");
     this.toggleOrtho = find<HTMLInputElement>("#toggle-ortho");
     this.btnSnapshot = find<HTMLButtonElement>("#btn-snapshot");
+
+    this.toggleFlipX = find<HTMLInputElement>("#toggle-flip-x");
+    this.toggleFlipY = find<HTMLInputElement>("#toggle-flip-y");
+    this.toggleFlipZ = find<HTMLInputElement>("#toggle-flip-z");
+    this.toggleSwapXY = find<HTMLInputElement>("#toggle-swap-xy");
+    this.toggleSwapXZ = find<HTMLInputElement>("#toggle-swap-xz");
+    this.btnResetAxes = find<HTMLButtonElement>("#btn-reset-axes");
 
     this.selectImportBudget = find<HTMLSelectElement>("#select-import-budget");
     this.importBudgetVal = find<HTMLElement>("#import-budget-val");
@@ -276,6 +290,47 @@ export class RenderSettingsPanel {
         }
       }
       AppEvents.emit("ui:import-budget-changed", budget);
+    });
+
+    // Coordinate Axes Flips and Swaps (Debug)
+    const updateAxes = () => {
+      this.viewer.setAxisOrientation({
+        flipX: !!this.toggleFlipX?.checked,
+        flipY: !!this.toggleFlipY?.checked,
+        flipZ: !!this.toggleFlipZ?.checked,
+        swapXY: !!this.toggleSwapXY?.checked,
+        swapXZ: !!this.toggleSwapXZ?.checked
+      });
+    };
+
+    this.toggleFlipX?.addEventListener("change", updateAxes);
+    this.toggleFlipY?.addEventListener("change", updateAxes);
+    this.toggleFlipZ?.addEventListener("change", updateAxes);
+    this.toggleSwapXY?.addEventListener("change", updateAxes);
+    this.toggleSwapXZ?.addEventListener("change", updateAxes);
+
+    this.btnResetAxes?.addEventListener("click", () => {
+      if (this.toggleFlipX) this.toggleFlipX.checked = false;
+      if (this.toggleFlipY) this.toggleFlipY.checked = false;
+      if (this.toggleFlipZ) this.toggleFlipZ.checked = false;
+      if (this.toggleSwapXY) this.toggleSwapXY.checked = false;
+      if (this.toggleSwapXZ) this.toggleSwapXZ.checked = false;
+      this.viewer.setAxisOrientation({
+        flipX: false,
+        flipY: false,
+        flipZ: false,
+        swapXY: false,
+        swapXZ: false
+      });
+    });
+
+    AppEvents.on("action:set-axis-flips", (flips: Partial<AxisOrientation>) => {
+      if (flips.flipX !== undefined && this.toggleFlipX) this.toggleFlipX.checked = flips.flipX;
+      if (flips.flipY !== undefined && this.toggleFlipY) this.toggleFlipY.checked = flips.flipY;
+      if (flips.flipZ !== undefined && this.toggleFlipZ) this.toggleFlipZ.checked = flips.flipZ;
+      if (flips.swapXY !== undefined && this.toggleSwapXY) this.toggleSwapXY.checked = flips.swapXY;
+      if (flips.swapXZ !== undefined && this.toggleSwapXZ) this.toggleSwapXZ.checked = flips.swapXZ;
+      this.viewer.setAxisOrientation(flips);
     });
   }
 
@@ -481,6 +536,47 @@ export class RenderSettingsPanel {
             <input type="checkbox" id="toggle-grid" checked>
             <span class="slider-toggle"></span>
           </label>
+        </div>
+
+        <!-- Coordinate Axes & Orientation (Debug) -->
+        <div class="section-title">Coordinate Axes (Debug)</div>
+        <div class="control-row">
+          <span>Flip X Axis</span>
+          <label class="switch">
+            <input type="checkbox" id="toggle-flip-x">
+            <span class="slider-toggle"></span>
+          </label>
+        </div>
+        <div class="control-row">
+          <span>Flip Y Axis</span>
+          <label class="switch">
+            <input type="checkbox" id="toggle-flip-y">
+            <span class="slider-toggle"></span>
+          </label>
+        </div>
+        <div class="control-row">
+          <span>Flip Z Axis</span>
+          <label class="switch">
+            <input type="checkbox" id="toggle-flip-z">
+            <span class="slider-toggle"></span>
+          </label>
+        </div>
+        <div class="control-row">
+          <span>Swap X ↔ Y</span>
+          <label class="switch">
+            <input type="checkbox" id="toggle-swap-xy">
+            <span class="slider-toggle"></span>
+          </label>
+        </div>
+        <div class="control-row">
+          <span>Swap X ↔ Z (Easting ↔ Northing)</span>
+          <label class="switch">
+            <input type="checkbox" id="toggle-swap-xz">
+            <span class="slider-toggle"></span>
+          </label>
+        </div>
+        <div class="button-grid" style="margin-top: 6px;">
+          <button id="btn-reset-axes" class="btn btn-secondary" style="grid-column: span 2;">↺ Reset Axes</button>
         </div>
 
         <!-- Export Point Cloud -->

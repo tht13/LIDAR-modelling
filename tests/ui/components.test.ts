@@ -279,6 +279,13 @@ describe("UI Components Modular Dual-View Unit Tests", () => {
         <button id="btn-view-top"></button>
         <button id="btn-view-reset"></button>
 
+        <input type="checkbox" id="toggle-flip-x" />
+        <input type="checkbox" id="toggle-flip-y" />
+        <input type="checkbox" id="toggle-flip-z" />
+        <input type="checkbox" id="toggle-swap-xy" />
+        <input type="checkbox" id="toggle-swap-xz" />
+        <button id="btn-reset-axes"></button>
+
         <!-- Minified quick toolbar controls -->
         <div id="quick-toolbar">
           <button id="quick-toggle-edl" class="quick-btn active"></button>
@@ -296,6 +303,7 @@ describe("UI Components Modular Dual-View Unit Tests", () => {
         setOrthoMode: vi.fn(),
         setCameraPreset: vi.fn(),
         exportSnapshot: vi.fn(),
+        setAxisOrientation: vi.fn(),
         edlPass: { enabled: true }
       };
     });
@@ -326,6 +334,57 @@ describe("UI Components Modular Dual-View Unit Tests", () => {
       const miniSnapshot = document.getElementById("quick-action-snapshot") as HTMLButtonElement;
       miniSnapshot.click();
       expect(mockViewer.exportSnapshot).toHaveBeenCalled();
+    });
+
+    it("toggles axis flips and swaps and calls viewer.setAxisOrientation", () => {
+      new RenderSettingsPanel(mockViewer);
+
+      const toggleFlipX = document.getElementById("toggle-flip-x") as HTMLInputElement;
+      toggleFlipX.checked = true;
+      toggleFlipX.dispatchEvent(new Event("change"));
+
+      expect(mockViewer.setAxisOrientation).toHaveBeenCalledWith({
+        flipX: true,
+        flipY: false,
+        flipZ: false,
+        swapXY: false,
+        swapXZ: false
+      });
+
+      const toggleSwapXY = document.getElementById("toggle-swap-xy") as HTMLInputElement;
+      toggleSwapXY.checked = true;
+      toggleSwapXY.dispatchEvent(new Event("change"));
+
+      expect(mockViewer.setAxisOrientation).toHaveBeenCalledWith({
+        flipX: true,
+        flipY: false,
+        flipZ: false,
+        swapXY: true,
+        swapXZ: false
+      });
+
+      const btnReset = document.getElementById("btn-reset-axes") as HTMLButtonElement;
+      btnReset.click();
+
+      expect(toggleFlipX.checked).toBe(false);
+      expect(toggleSwapXY.checked).toBe(false);
+      expect(mockViewer.setAxisOrientation).toHaveBeenCalledWith({
+        flipX: false,
+        flipY: false,
+        flipZ: false,
+        swapXY: false,
+        swapXZ: false
+      });
+    });
+
+    it("handles action:set-axis-flips event to update checkboxes and viewer", () => {
+      new RenderSettingsPanel(mockViewer);
+      const toggleFlipZ = document.getElementById("toggle-flip-z") as HTMLInputElement;
+
+      AppEvents.emit("action:set-axis-flips", { flipZ: true });
+
+      expect(toggleFlipZ.checked).toBe(true);
+      expect(mockViewer.setAxisOrientation).toHaveBeenCalledWith({ flipZ: true });
     });
   });
 

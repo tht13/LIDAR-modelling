@@ -16,6 +16,14 @@ export interface ParseResult {
 
 export type ToolMode = "orbit" | "measure" | "profile" | "inspect" | "fly";
 
+export interface AxisOrientation {
+  flipX: boolean;
+  flipY: boolean;
+  flipZ: boolean;
+  swapXY: boolean;
+  swapXZ: boolean;
+}
+
 export enum ColorMode {
   RGB = 0,
   Turbo = 1,

@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { PointCloud } from "./PointCloud";
 import { EDLPass } from "../shaders/EDLPass";
-import { CameraPreset } from "../types";
+import { CameraPreset, AxisOrientation } from "../types";
 import { FirstPersonControls } from "../tools/FirstPersonControls";
 import { CameraManager } from "./CameraManager";
 
@@ -13,6 +13,13 @@ export class Viewer {
   public readonly gridHelper: THREE.GridHelper;
   public readonly edlPass: EDLPass;
   public pointCloud: PointCloud | null = null;
+  private axisOrientation: AxisOrientation = {
+    flipX: false,
+    flipY: false,
+    flipZ: false,
+    swapXY: false,
+    swapXZ: false
+  };
 
   constructor(container?: HTMLElement) {
     this.scene = new THREE.Scene();
@@ -67,6 +74,11 @@ export class Viewer {
     }
 
     this.pointCloud = pc;
+
+    if (this.axisOrientation.flipX || this.axisOrientation.flipY || this.axisOrientation.flipZ || this.axisOrientation.swapXY || this.axisOrientation.swapXZ) {
+      this.pointCloud.setAxisOrientation(this.axisOrientation);
+    }
+
     this.scene.add(pc.mesh);
     this.gridHelper.position.y = -pc.data.size[1] / 2 - 2;
 
@@ -74,6 +86,21 @@ export class Viewer {
     this.gridHelper.scale.setScalar(Math.max(1, maxDim / 2000));
 
     this.setCameraPreset("iso");
+  }
+
+  public setAxisOrientation(orientation: Partial<AxisOrientation>): void {
+    this.axisOrientation = { ...this.axisOrientation, ...orientation };
+    if (this.pointCloud) {
+      this.pointCloud.setAxisOrientation(this.axisOrientation);
+      const bbox = this.pointCloud.geometry.boundingBox;
+      if (bbox) {
+        this.gridHelper.position.y = bbox.min.y - 2;
+      }
+    }
+  }
+
+  public getAxisOrientation(): AxisOrientation {
+    return { ...this.axisOrientation };
   }
 
   public setBackgroundBrightness(normalized: number): void {

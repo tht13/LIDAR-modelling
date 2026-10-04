@@ -68,7 +68,8 @@ export class ProfileTool extends BaseTwoPointTool {
     if (!this.viewer.pointCloud) return null;
 
     const data = this.viewer.pointCloud.data;
-    const positions = data.positions;
+    const posAttr = this.viewer.pointCloud.geometry.getAttribute("position") as THREE.BufferAttribute;
+    const positions = posAttr ? (posAttr.array as Float32Array) : data.positions;
     const center = data.center;
     const count = data.count;
 

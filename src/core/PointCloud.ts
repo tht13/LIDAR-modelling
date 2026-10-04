@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { pointVertexShader, pointFragmentShader } from "../shaders/pointShaders";
-import { ParseResult, ColorMode } from "../types";
+import { ParseResult, ColorMode, AxisOrientation } from "../types";
 import { GeoCoordinates } from "../utils/GeoCoordinates";
 
 export class PointCloud {
@@ -12,14 +12,21 @@ export class PointCloud {
   private currentDecimation: number = 1.0;
   private enabledClassifications: Set<number> = new Set();
   private hasClassificationData: boolean = false;
+  private axisOrientation: AxisOrientation = {
+    flipX: false,
+    flipY: false,
+    flipZ: false,
+    swapXY: false,
+    swapXZ: false
+  };
 
   constructor(data: ParseResult, initialPointSize: number = 3.0, isOrtho: boolean = false, initialShape: number = 0) {
     this.data = data;
 
     this.geometry = new THREE.BufferGeometry();
-    this.geometry.setAttribute("position", new THREE.BufferAttribute(data.positions, 3));
+    this.geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(data.positions), 3));
     this.geometry.setAttribute("customColor", new THREE.BufferAttribute(data.colors, 3));
-    this.geometry.setAttribute("elevation", new THREE.BufferAttribute(data.elevations, 1));
+    this.geometry.setAttribute("elevation", new THREE.BufferAttribute(new Float32Array(data.elevations), 1));
     this.geometry.computeBoundingSphere();
 
     if (data.classifications && data.classifications.length === data.count) {
@@ -172,13 +179,94 @@ export class PointCloud {
   }
 
   /**
+   * Returns current axis orientation flips and swaps.
+   */
+  public getAxisOrientation(): AxisOrientation {
+    return { ...this.axisOrientation };
+  }
+
+  /**
+   * Applies axis orientation flips and/or swaps to the point cloud.
+   */
+  public setAxisOrientation(orientation: Partial<AxisOrientation>): void {
+    this.axisOrientation = {
+      ...this.axisOrientation,
+      ...orientation
+    };
+    this.applyAxisOrientation();
+  }
+
+  /**
+   * Re-evaluates position buffer and elevation attribute from base data
+   * according to current axisOrientation settings.
+   */
+  public applyAxisOrientation(): void {
+    const basePos = this.data.positions;
+    const posAttr = this.geometry.getAttribute("position") as THREE.BufferAttribute;
+    if (!posAttr) return;
+    const pos = posAttr.array as Float32Array;
+    const count = this.data.count;
+
+    const { flipX, flipY, flipZ, swapXY, swapXZ } = this.axisOrientation;
+
+    let minY = Infinity;
+    let maxY = -Infinity;
+
+    for (let i = 0; i < count; i++) {
+      const i3 = i * 3;
+      let x = basePos[i3];
+      let y = basePos[i3 + 1];
+      let z = basePos[i3 + 2];
+
+      if (swapXY) {
+        const tmp = x;
+        x = y;
+        y = tmp;
+      }
+      if (swapXZ) {
+        const tmp = x;
+        x = z;
+        z = tmp;
+      }
+
+      const fx = flipX ? -x : x;
+      const fy = flipY ? -y : y;
+      const fz = flipZ ? -z : z;
+
+      pos[i3] = fx;
+      pos[i3 + 1] = fy;
+      pos[i3 + 2] = fz;
+
+      if (fy < minY) minY = fy;
+      if (fy > maxY) maxY = fy;
+    }
+
+    posAttr.needsUpdate = true;
+
+    // Re-normalize elevation attribute for colormaps
+    const elevAttr = this.geometry.getAttribute("elevation") as THREE.BufferAttribute;
+    if (elevAttr) {
+      const elev = elevAttr.array as Float32Array;
+      const ySpan = maxY - minY || 1.0;
+      for (let i = 0; i < count; i++) {
+        elev[i] = (pos[i * 3 + 1] - minY) / ySpan;
+      }
+      elevAttr.needsUpdate = true;
+    }
+
+    this.geometry.computeBoundingSphere();
+    this.geometry.computeBoundingBox();
+  }
+
+  /**
    * Iterates through active points (filtered or full cloud) and invokes callback with world GIS coordinates and colors.
    */
   public forEachActivePoint(
     cb: (worldX: number, worldY: number, worldZ: number, r: number, g: number, b: number, index: number) => void,
     onlyActive: boolean = true
   ): number {
-    const pos = this.data.positions;
+    const posAttr = this.geometry.getAttribute("position") as THREE.BufferAttribute;
+    const pos = posAttr ? (posAttr.array as Float32Array) : this.data.positions;
     const colors = this.data.colors;
     const center = this.data.center;
 
