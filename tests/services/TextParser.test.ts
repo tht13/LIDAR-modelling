@@ -24,8 +24,8 @@ describe("TextParser", () => {
       // Verify coordinate transformation (X, Y=Elev, Z=Northing) centered at origin
       // Center: X=110, Y(northing)=210, Z(elev)=60
       expect(result.center).toEqual([110, 60, 210]);
-      // First point: pos = [100 - 110, 50 - 60, 200 - 210] = [-10, -10, -10]
-      expect(result.positions[0]).toBeCloseTo(-10);
+      // First point: pos = [-(100 - 110), 50 - 60, 200 - 210] = [10, -10, -10]
+      expect(result.positions[0]).toBeCloseTo(10);
       expect(result.positions[1]).toBeCloseTo(-10);
       expect(result.positions[2]).toBeCloseTo(-10);
 

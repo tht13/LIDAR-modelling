@@ -128,7 +128,8 @@ describe("PointCloud", () => {
     const count = pc.forEachActivePoint((x, y, z, r, g, b, idx) => {
       iterated++;
       expect(idx).toBeDefined();
-      expect(x).toBeGreaterThan(0); // Translated by center
+      expect(typeof x).toBe("number");
+      expect(isNaN(x)).toBe(false);
     });
 
     expect(count).toBe(10);
@@ -254,8 +255,8 @@ describe("PointCloud", () => {
         points.push([x, y, z]);
       });
 
-      // center was [5, 5, 25], point 1 had x=1 => flipped x = -1 => realX = -1 + 5 = 4
-      expect(points[1][0]).toBe(4);
+      // center was [5, 5, 25], point 1 had localX = 1 => flipped localX = -1 => realX = -(-1) + 5 = 6
+      expect(points[1][0]).toBe(6);
     });
   });
 

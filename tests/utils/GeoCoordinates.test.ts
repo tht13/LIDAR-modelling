@@ -9,14 +9,14 @@ describe("GeoCoordinates", () => {
     const elevation = 105.0;
 
     const [lx, ly, lz] = GeoCoordinates.toLocal(easting, northing, elevation, center);
-    expect(lx).toBeCloseTo(10.0);
+    expect(lx).toBeCloseTo(-10.0);
     expect(ly).toBeCloseTo(5.0); // Elevation mapped to Y (Up)
     expect(lz).toBeCloseTo(20.0); // Northing mapped to Z
   });
 
   it("converts Three.js local space back to real-world GIS coordinates accurately", () => {
     const center: [number, number, number] = [500000.0, 100.0, 6000000.0];
-    const lx = 10.0;
+    const lx = -10.0;
     const ly = 5.0;
     const lz = 20.0;
 

@@ -13,6 +13,7 @@ export class GeoCoordinates {
   /**
    * Converts world GIS coordinates (Easting, Northing, Elevation) to
    * Three.js local space (X = East, Y = Up/Elev, Z = North) centered at origin.
+   * The X axis is inverted to match standard viewpoint orientation.
    */
   public static toLocal(
     easting: number,
@@ -21,7 +22,7 @@ export class GeoCoordinates {
     center: [number, number, number]
   ): [number, number, number] {
     return [
-      easting - center[0],
+      -(easting - center[0]),
       elevation - center[1],
       northing - center[2]
     ];
@@ -38,7 +39,7 @@ export class GeoCoordinates {
     center: [number, number, number]
   ): [number, number, number] {
     return [
-      localX + center[0],
+      -localX + center[0],
       localNorth + center[2],
       localElev + center[1]
     ];

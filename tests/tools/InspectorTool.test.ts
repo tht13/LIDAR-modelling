@@ -20,7 +20,7 @@ describe("InspectorTool", () => {
       inspected = pt;
     });
 
-    const localPoint = new THREE.Vector3(12.5, 30.2, -45.0);
+    const localPoint = new THREE.Vector3(-12.5, 30.2, -45.0);
     tool.handlePointerMove(localPoint, 350, 420);
 
     expect(inspected).not.toBeNull();
